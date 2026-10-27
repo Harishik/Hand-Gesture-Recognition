@@ -1,6 +1,6 @@
 """Train the landmark gesture classifier on the HaGRIDv2 cache.
 
-    python -m hgr.train [--negatives all|no_gesture] [--epochs 30] [--out models/gesture_mlp.pt]
+    python -m hgr.train [--classes hagrid|core6] [--negatives all|no_gesture] [--out models/gesture_mlp.pt]
 
 Each epoch draws a class-balanced sample (fresh augmentation every time). After training, the softmax temperature is
 fitted on the validation split, and the no_gesture logit bias is tuned there to maximise class-balanced macro F1.
@@ -17,36 +17,39 @@ import torch
 from torch import nn
 
 from hgr.augment import augmented_features
+from hgr.features import FEATURE_DIM
 from hgr.hagrid import load_cache
-from hgr.labels import HAGRID_ALIASES, HAGRID_CLASSES, TARGET_CLASSES
+from hgr.labels import GESTURE_SETS, HAGRID_CLASSES, REJECT
 from hgr.metrics import classification_metrics
 from hgr.model import GestureClassifier, GestureMLP
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REJECT = "no_gesture"
 
 
-def target_label_map():
-    """HaGRID class id -> target class index, including aliases (e.g. peace_inverted -> peace)."""
-    names = {c: c for c in TARGET_CLASSES} | HAGRID_ALIASES
-    return {HAGRID_CLASSES.index(h): TARGET_CLASSES.index(t) for h, t in names.items()}
+def target_label_map(gesture_set="hagrid"):
+    """HaGRID class id -> class index in `gesture_set`, including the set's aliases (e.g. peace_inverted -> peace)."""
+    spec = GESTURE_SETS[gesture_set]
+    classes = spec["classes"]
+    names = {c: c for c in classes} | spec["aliases"]
+    return {HAGRID_CLASSES.index(h): classes.index(t) for h, t in names.items()}
 
 
-def selection_mask(arrays, split, negatives):
-    """Which hands of `split` are used. `negatives="all"` keeps every hand (non-target gestures become no_gesture);
-    "no_gesture" keeps only target classes, their aliases and HaGRID's no_gesture."""
+def selection_mask(arrays, split, negatives, gesture_set="hagrid"):
+    """Which hands of `split` are used. `negatives="all"` keeps every hand (other gestures become no_gesture);
+    "no_gesture" keeps only the set's classes, their aliases and HaGRID's no_gesture."""
     in_split = arrays["split"] == split
     if negatives == "all":
         return in_split
     if negatives == "no_gesture":
-        return in_split & np.isin(arrays["label"], list(target_label_map()))
+        return in_split & np.isin(arrays["label"], list(target_label_map(gesture_set)))
     raise ValueError(f"negatives must be 'all' or 'no_gesture', got {negatives!r}")
 
 
-def select(arrays, split, negatives):
-    """Landmarks and target-class labels for one split."""
-    keep = selection_mask(arrays, split, negatives)
-    mapping, reject = target_label_map(), TARGET_CLASSES.index(REJECT)
+def select(arrays, split, negatives, gesture_set="hagrid"):
+    """Landmarks and class indices (within `gesture_set`) for one split."""
+    keep = selection_mask(arrays, split, negatives, gesture_set)
+    mapping = target_label_map(gesture_set)
+    reject = GESTURE_SETS[gesture_set]["classes"].index(REJECT)
     y = np.array([mapping.get(v, reject) for v in arrays["label"][keep]], dtype=np.int64)
     return arrays["landmarks"][keep], y
 
@@ -115,11 +118,8 @@ def tune_reject_bias(logits, y, temperature, reject_index, grid=BIAS_GRID):
     return float(b), {f"{g:.1f}": float(s) for g, s in zip(grid, scores, strict=True)}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+def add_training_args(parser):
     parser.add_argument("--cache", type=Path, default=REPO_ROOT / "data" / "processed" / "hagrid_landmarks.npz")
-    parser.add_argument("--out", type=Path, default=REPO_ROOT / "models" / "gesture_mlp.pt")
-    parser.add_argument("--negatives", choices=["all", "no_gesture"], default="all")
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--per-class", type=int, default=30000)
     parser.add_argument("--batch-size", type=int, default=1024)
@@ -129,23 +129,18 @@ def main():
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--max-rotation", type=float, default=20.0, help="rotation augmentation range (degrees)")
     parser.add_argument("--seed", type=int, default=0)
-    args = parser.parse_args()
 
+
+def fit(make_features, y_train, x_val, y_val, classes, args, in_dim=FEATURE_DIM, kind="hand"):
+    """Train an MLP, then calibrate it on validation. `make_features(indices, rng)` builds augmented train features.
+
+    Returns the classifier and a training report.
+    """
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    arrays = load_cache(args.cache)
-    lm_train, y_train = select(arrays, 0, args.negatives)
-    lm_val, y_val = select(arrays, 1, args.negatives)
-    num_classes = len(TARGET_CLASSES)
-    print(f"train hands {len(y_train):,}  val hands {len(y_val):,}  counts {np.bincount(y_train).tolist()}")
-
-    # Validation features use aspects drawn from the prior, but fixed (seeded) and without augmentation.
-    x_val = augmented_features(lm_val, np.random.default_rng(1), augment=False)
-
-    model = GestureMLP(num_classes, hidden=args.hidden, depth=args.depth, dropout=args.dropout)
-    model.set_normalization(
-        augmented_features(lm_train[rng.choice(len(lm_train), 200_000)], rng, max_rotation_deg=args.max_rotation)
-    )
+    num_classes = len(classes)
+    model = GestureMLP(num_classes, in_dim=in_dim, hidden=args.hidden, depth=args.depth, dropout=args.dropout)
+    model.set_normalization(make_features(rng.choice(len(y_train), min(200_000, len(y_train))), rng))
     steps_per_epoch = num_classes * args.per_class // args.batch_size
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, args.lr, total_steps=args.epochs * steps_per_epoch)
@@ -155,7 +150,7 @@ def main():
     for epoch in range(1, args.epochs + 1):
         start = time.perf_counter()
         idx = balanced_epoch(y_train, args.per_class, rng)
-        x = torch.from_numpy(augmented_features(lm_train[idx], rng, max_rotation_deg=args.max_rotation))
+        x = torch.from_numpy(make_features(idx, rng))
         y = torch.from_numpy(y_train[idx])
         model.train()
         total = 0.0
@@ -171,7 +166,8 @@ def main():
         history.append({"epoch": epoch, "loss": total / steps_per_epoch, "val_balanced_macro_f1": val_f1})
         print(
             f"epoch {epoch:2d}  loss {total / steps_per_epoch:.4f}  val bal-F1 {val_f1:.4f}"
-            f"  {time.perf_counter() - start:.1f}s"
+            f"  {time.perf_counter() - start:.1f}s",
+            flush=True,
         )
         if val_f1 > best_f1:
             best_f1, best_state = val_f1, {k: v.clone() for k, v in model.state_dict().items()}
@@ -179,24 +175,46 @@ def main():
     model.load_state_dict(best_state)
     val_logits = predict_logits(model, x_val)
     temperature = fit_temperature(val_logits, y_val)
-    reject_bias, bias_curve = tune_reject_bias(val_logits, y_val, temperature, TARGET_CLASSES.index(REJECT))
-    clf = GestureClassifier(
-        model,
-        TARGET_CLASSES,
-        temperature,
-        reject_bias,
-        REJECT,
-        config=vars(args) | {"cache": str(args.cache), "out": str(args.out)},
-    )
-    clf.save(args.out)
-
-    val_metrics = classification_metrics(y_val, clf.predict(x_val), TARGET_CLASSES)
-    print(f"\nbest val bal-F1 {best_f1:.4f}  temperature {temperature:.3f}  reject bias {reject_bias:+.2f}")
+    reject_bias, bias_curve = tune_reject_bias(val_logits, y_val, temperature, classes.index(REJECT))
+    config = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()} | {"kind": kind}
+    clf = GestureClassifier(model, classes, temperature, reject_bias, REJECT, config=config)
+    val_metrics = classification_metrics(y_val, clf.predict(x_val), classes)
+    print(f"best val bal-F1 {best_f1:.4f}  temperature {temperature:.3f}  reject bias {reject_bias:+.2f}")
     print(f"val accuracy {val_metrics['accuracy']:.4f}  macro precision {val_metrics['macro_precision']:.4f}")
-    report = args.out.with_suffix(".train.json")
-    report.write_text(json.dumps({"history": history, "temperature": temperature, "reject_bias": reject_bias,
-                                  "bias_curve": bias_curve, "val": val_metrics}, indent=1))  # fmt: skip
-    print(f"Saved {args.out} and {report}")
+    report = {"history": history, "temperature": temperature, "reject_bias": reject_bias,
+              "bias_curve": bias_curve, "val": val_metrics}  # fmt: skip
+    return clf, report
+
+
+def save(clf, report, out):
+    clf.save(out)
+    report_path = Path(out).with_suffix(".train.json")
+    report_path.write_text(json.dumps(report, indent=1))
+    print(f"Saved {out} and {report_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    add_training_args(parser)
+    parser.add_argument("--classes", choices=sorted(GESTURE_SETS), default="hagrid")
+    parser.add_argument("--negatives", choices=["all", "no_gesture"], default="all")
+    parser.add_argument("--out", type=Path, default=REPO_ROOT / "models" / "gesture_mlp.pt")
+    args = parser.parse_args()
+
+    classes = GESTURE_SETS[args.classes]["classes"]
+    arrays = load_cache(args.cache)
+    lm_train, y_train = select(arrays, 0, args.negatives, args.classes)
+    lm_val, y_val = select(arrays, 1, args.negatives, args.classes)
+    print(f"{len(classes)} classes  train hands {len(y_train):,}  val hands {len(y_val):,}", flush=True)
+
+    # Validation features use aspects drawn from the prior, but fixed (seeded) and without augmentation.
+    x_val = augmented_features(lm_val, np.random.default_rng(1), augment=False)
+
+    def make_features(idx, rng):
+        return augmented_features(lm_train[idx], rng, max_rotation_deg=args.max_rotation)
+
+    clf, report = fit(make_features, y_train, x_val, y_val, classes, args)
+    save(clf, report, args.out)
 
 
 if __name__ == "__main__":
