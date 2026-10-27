@@ -54,6 +54,55 @@ export function drawGlyph(g, id, x, y, size, { color = "#ECE8E1", width = 2, joi
   g.restore();
 }
 
+const ARROWS = { swipe_left: [-1, 0], swipe_right: [1, 0], swipe_up: [0, -1], swipe_down: [0, 1] };
+const urlCache = new Map();
+
+/** Data URL of a gesture glyph, cached. Motion gestures get an arrow, custom gestures a diamond, others a ring. */
+export function glyphURL(id, size = 28, color = "#ece8e1") {
+  const key = `${id}|${size}|${color}`;
+  if (urlCache.has(key)) return urlCache.get(key);
+  const dpr = 2;
+  const c = document.createElement("canvas");
+  c.width = c.height = size * dpr;
+  const g = c.getContext("2d");
+  g.scale(dpr, dpr);
+  const m = size / 2;
+  g.strokeStyle = g.fillStyle = color;
+  g.lineWidth = Math.max(1.4, size / 18);
+  g.lineCap = g.lineJoin = "round";
+  if (ARROWS[id]) {
+    const [dx, dy] = ARROWS[id];
+    const r = size * 0.3;
+    g.beginPath();
+    g.moveTo(m - dx * r, m - dy * r);
+    g.lineTo(m + dx * r, m + dy * r);
+    g.moveTo(m + dx * r - (dx + dy) * r * 0.45, m + dy * r - (dy - dx) * r * 0.45);
+    g.lineTo(m + dx * r, m + dy * r);
+    g.lineTo(m + dx * r - (dx - dy) * r * 0.45, m + dy * r - (dy + dx) * r * 0.45);
+    g.stroke();
+  } else if (id?.startsWith("custom:")) {
+    g.beginPath();
+    g.moveTo(m, size * 0.22);
+    g.lineTo(size * 0.78, m);
+    g.lineTo(m, size * 0.78);
+    g.lineTo(size * 0.22, m);
+    g.closePath();
+    g.stroke();
+  } else if (id === "pinch") {
+    g.beginPath();
+    g.arc(m, m, size * 0.12, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.arc(m, m, size * 0.28, 0, Math.PI * 2);
+    g.stroke();
+  } else {
+    drawGlyph(g, id, 0, 0, size, { color, width: Math.max(1.2, size / 24), joints: size >= 40 });
+  }
+  const url = c.toDataURL();
+  urlCache.set(key, url);
+  return url;
+}
+
 /** A small canvas element showing a gesture glyph (crisp on high-DPI screens). */
 export function glyphCanvas(id, cssSize, options) {
   const c = document.createElement("canvas");
