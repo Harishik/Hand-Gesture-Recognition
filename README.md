@@ -20,12 +20,22 @@ Real-time hand gesture recognition from a webcam.
 
 ```
 ├── data/personal/         # 34 hand-captured photos: an out-of-distribution test set
+├── docs/DATA.md           # dataset statistics, split audit, aspect-ratio analysis
+├── scripts/               # download, cache building, landmark extraction, figures
 ├── src/hgr/
+│   ├── hagrid.py          # HaGRIDv2 annotation loader and cache
+│   ├── features.py        # landmark normalisation and feature vectors
+│   ├── splits.py          # subject-disjoint split checks and splitting
+│   ├── landmarker.py      # MediaPipe Tasks HandLandmarker wrapper
 │   ├── labels.py          # shared class vocabulary
 │   └── legacy/            # original SSIM template-matching baseline
 ├── tests/
 └── IMPROVEMENT_PLAN.md
 ```
+
+## Data
+
+The dataset is HaGRIDv2: 1.31M annotated hands with MediaPipe landmarks, split by subject. See [docs/DATA.md](docs/DATA.md) for statistics and findings, including a train/test subject leak in the official split, and evidence that HaGRID mixes image aspect ratios, which the annotations don't record.
 
 ## Quickstart
 
