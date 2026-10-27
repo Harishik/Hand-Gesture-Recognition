@@ -56,8 +56,12 @@ def fingertip_distances(pts):
     return np.linalg.norm(pts[:, _TIP_PAIRS[:, 0]] - pts[:, _TIP_PAIRS[:, 1]], axis=-1)
 
 
-def featurize(landmarks, aspect=1.0):
-    """(N, 21, 2) raw landmarks -> (N, FEATURE_DIM) float32 features."""
-    pts = normalize_landmarks(landmarks, aspect)
+def features_from_points(pts):
+    """(N, 21, 2) normalised points (see normalize_landmarks) -> (N, FEATURE_DIM) float32 features."""
     feats = np.concatenate([pts.reshape(len(pts), -1), joint_angles(pts), fingertip_distances(pts)], axis=1)
     return feats.astype(np.float32)
+
+
+def featurize(landmarks, aspect=1.0):
+    """(N, 21, 2) raw landmarks -> (N, FEATURE_DIM) float32 features."""
+    return features_from_points(normalize_landmarks(landmarks, aspect))

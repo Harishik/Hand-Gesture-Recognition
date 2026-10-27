@@ -21,17 +21,34 @@ Real-time hand gesture recognition from a webcam.
 ```
 ├── data/personal/         # 34 hand-captured photos: an out-of-distribution test set
 ├── docs/DATA.md           # dataset statistics, split audit, aspect-ratio analysis
+├── docs/MODEL.md          # method, results, ablations, findings
+├── reports/               # evaluation outputs (JSON)
 ├── scripts/               # download, cache building, landmark extraction, figures
 ├── src/hgr/
 │   ├── hagrid.py          # HaGRIDv2 annotation loader and cache
 │   ├── features.py        # landmark normalisation and feature vectors
 │   ├── splits.py          # subject-disjoint split checks and splitting
 │   ├── landmarker.py      # MediaPipe Tasks HandLandmarker wrapper
+│   ├── augment.py         # landmark augmentation and aspect-ratio sampling
+│   ├── model.py           # MLP + calibrated classifier checkpoint
+│   ├── train.py, evaluate.py
+│   ├── metrics.py         # accuracy, precision/recall/F1, calibration error
+│   ├── pipeline.py        # real-time pipeline with temporal smoothing
 │   ├── labels.py          # shared class vocabulary
 │   └── legacy/            # original SSIM template-matching baseline
 ├── tests/
 └── IMPROVEMENT_PLAN.md
 ```
+
+## Results
+
+| Test set | Accuracy | Precision |
+|---|---|---|
+| HaGRIDv2 test, unseen people (60k hands) | 99.4% | 99.2% |
+| HaGRIDv2 open-set test (must also reject 26 other gestures, 201k hands) | 99.0% | 94.2% |
+| Personal photos (unseen person, camera and background) | 93.9% | 100% |
+
+It runs at about 21 FPS end to end on a laptop CPU. See [docs/MODEL.md](docs/MODEL.md) for the method, ablations, findings and caveats.
 
 ## Data
 
@@ -43,6 +60,21 @@ The dataset is HaGRIDv2: 1.31M annotated hands with MediaPipe landmarks, split b
 python -m venv .venv
 .venv\Scripts\activate          # Windows; use `source .venv/bin/activate` elsewhere
 pip install -e ".[legacy,dev]"
+```
+
+Train, evaluate and run the landmark classifier (needs the data cache from [docs/DATA.md](docs/DATA.md)):
+
+```bash
+python -m hgr.train                     # ~10 min on a laptop CPU -> models/gesture_mlp.pt
+python -m hgr.evaluate                  # HaGRID test + personal photos -> reports/metrics.json
+python scripts/live.py                  # live webcam demo
+```
+
+Measure real-time accuracy on your own recorded clips:
+
+```bash
+python scripts/record_clips.py --session yourname_room1   # guided: one 8 s clip per gesture
+python scripts/eval_clips.py                              # frame-level metrics + latency -> reports/realtime_metrics.json
 ```
 
 Run the legacy baseline (press `q` to quit):

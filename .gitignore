@@ -21,6 +21,7 @@ data/processed/*
 !data/processed/hagrid_aspect_sample.json
 
 # Training outputs & weights (published to the Hugging Face Hub instead)
+models/
 runs/
 mlruns/
 wandb/
