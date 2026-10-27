@@ -85,3 +85,44 @@ All were trained with the same recipe. These rows were evaluated before the `pea
   - It's small: one photo is 3 percentage points.
   - Its errors led to the `peace_inverted` finding.
   - Final claims should therefore rest on recorded webcam clips from several people and rooms (`scripts/record_clips.py` and `scripts/eval_clips.py`).
+
+## Full HaGRIDv2 vocabulary (33 gestures)
+
+The system now recognises the full HaGRIDv2 gesture set with two models.
+
+### One-hand model: 26 gestures + `no_gesture`
+
+- **Training:** the same recipe as above with `--classes hagrid`, 30 epochs, 30,000 hands per class per epoch, about 25 minutes on a laptop CPU.
+- **Labels:** the halves of two-handed gestures are negatives for this model, because the pair model handles them.
+- **No aliases:** `peace_inverted` and the other `_inverted` classes are separate classes here. They count as their upright equivalents only in the "lenient" personal score.
+
+| Test set (unseen subjects) | n | Accuracy | Macro precision | Macro recall | Macro F1 | ECE |
+|---|---|---|---|---|---|---|
+| Core: 26 gestures + no_gesture | 153,755 | **98.8%** | **98.9%** | 98.9% | 98.9% | 0.014 |
+| Open-set: + halves of two-hand gestures | 201,133 | 94.7% | 95.7% | 98.8% | 96.8% | 0.021 |
+
+- **Hardest classes:** the lowest per-class F1 scores are `one` 0.964, `mute` 0.965 and `point` 0.966. All three are index-finger poses that differ mainly in orientation.
+- **Demographic slices:** gesture recall is between 98.1% and 99.0% for every group.
+- **Personal photos:** 75.8% strict and 87.9% lenient.
+  - **By definition:** four of the eight errors are back-of-hand V signs, now correctly called `peace_inverted` under HaGRID's own definition. The lenient score counts these as correct.
+  - **Landmark failures:** the other four are close-up fists whose landmarks MediaPipe garbles (see finding 3 above).
+
+### Two-hand model: 7 gestures + "two hands, no gesture"
+
+- **Data:** images with exactly two landmark-annotated hands. The label is the two-handed gesture when HaGRID gives it to both hands; otherwise it's `no_gesture`, for example one gesture next to a relaxed hand.
+- **Features (221):**
+  - both hands' points in a shared frame, centred between the wrists and scaled by mean palm length;
+  - each hand's own 67 features;
+  - the vector and distance between the wrists.
+  The features don't depend on which hand comes first. Augmentation applies the same transform to both hands.
+
+| Test pairs (unseen subjects) | n | Accuracy | Macro precision | Macro recall |
+|---|---|---|---|---|
+| 7 two-hand gestures + no_gesture | 44,195 | **99.3%** | **98.0%** | 98.9% |
+
+Per class precision / recall: `hand_heart` 0.991 / 0.999, `hand_heart2` 0.985 / 0.984, `holy` 0.968 / 0.990, `take_picture` 0.986 / 0.987, `thumb_index2` 0.995 / 0.999, `timeout` 0.941 / 0.966, `xsign` 0.994 / 0.997.
+
+### Browser deployment
+
+- **Export:** `scripts/export_web.py` folds each BatchNorm into its preceding Linear layer and writes the weights as base64 float32 (814 KB and 995 KB). The browser runs them in plain JavaScript with exact GELU.
+- **Parity:** `tests/test_web_parity.py` runs `web/tests/parity.mjs` on real test hands. JavaScript and Python agree to within 7e-5 on features and 2e-6 on probabilities, with identical predicted classes.

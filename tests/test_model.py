@@ -68,17 +68,22 @@ def test_metrics_and_ece():
     assert expected_calibration_error(probs, np.array([0, 0, 1, 2])) == pytest.approx(0.0)
 
 
-def test_peace_inverted_counts_as_peace_and_other_gestures_are_rejected():
-    from hgr.labels import HAGRID_CLASSES, TARGET_CLASSES
+def test_peace_inverted_counts_as_peace_in_core6_and_other_gestures_are_rejected():
+    from hgr.labels import GESTURE_SETS, HAGRID_CLASSES
     from hgr.train import select
 
+    classes = GESTURE_SETS["core6"]["classes"]
     names = ["peace", "peace_inverted", "stop", "no_gesture"]
     arrays = {
         "label": np.array([HAGRID_CLASSES.index(n) for n in names]),
         "split": np.zeros(4, dtype=np.int8),
         "landmarks": np.zeros((4, 21, 2), dtype=np.float32),
     }
-    _, y = select(arrays, 0, "all")
-    assert [TARGET_CLASSES[i] for i in y] == ["peace", "peace", "no_gesture", "no_gesture"]
-    _, y = select(arrays, 0, "no_gesture")
-    assert [TARGET_CLASSES[i] for i in y] == ["peace", "peace", "no_gesture"]
+    _, y = select(arrays, 0, "all", "core6")
+    assert [classes[i] for i in y] == ["peace", "peace", "no_gesture", "no_gesture"]
+    _, y = select(arrays, 0, "no_gesture", "core6")
+    assert [classes[i] for i in y] == ["peace", "peace", "no_gesture"]
+
+    full = GESTURE_SETS["hagrid"]["classes"]
+    _, y = select(arrays, 0, "all", "hagrid")
+    assert [full[i] for i in y] == ["peace", "peace_inverted", "stop", "no_gesture"]

@@ -1,112 +1,108 @@
-# Hand Gesture Recognition
+# Gesture Studio: real-time hand gesture recognition
 
-Real-time hand gesture recognition from a webcam.
+A real-time hand gesture system that runs entirely in the browser, trained on 1.3M hands from HaGRIDv2:
+- **33 gestures:** 26 one-hand and 7 two-hand.
+- **Swipes and an air cursor:** swipe left, right, up or down; point and pinch to click.
+- **Custom gestures:** teach a new one from a 3-second recording.
+- **3D hand view:** your hand rendered live in 3D, driving a gesture-controlled object.
 
-> **Status: under active rebuild.** The original 2024 version (SSIM template matching on 34 hand-captured photos) is preserved as a baseline. The new version is a learned, landmark-based pipeline trained on [HaGRIDv2](https://github.com/hukenovs/hagrid). See [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) for the full roadmap.
+Everything runs on-device; no video leaves the browser.
 
-## Gestures
+```bash
+python scripts/serve_web.py      # then open http://localhost:8765 and press "Start camera"
+```
 
-| Class (HaGRIDv2 name) | Personal test-set folder |
+## What it does
+
+| Feature | How |
 |---|---|
-| `palm` | `hello` |
-| `fist` | `fist` |
-| `peace` | `peace` |
-| `ok` | `okay` |
-| `like` | `thumbs_up` |
-| `dislike` | `thumbs_down` |
-| `no_gesture` | — |
+| **33 static gestures** | MediaPipe HandLandmarker → 67 landmark features → MLP (26 one-hand classes + rejection) |
+| **Two-hand gestures** (heart, prayer, X sign, timeout, frame…) | A second MLP on both hands jointly (221 features: both hands plus their relative pose) |
+| **Swipes** | Palm-centre velocity over 320 ms, normalised by palm size, so it works at any distance |
+| **Air cursor** | Index fingertip with a One Euro filter; pinch to click any control, pinch-drag sliders |
+| **Dwell to confirm** | A gesture must be held for 450 ms to fire, once per hold; avoids accidental triggers |
+| **Teach a gesture** | Few-shot nearest neighbour in the MLP's learned embedding space; saved in the browser |
+| **3D lab** (Three.js) | Live 3D hand skeleton from MediaPipe world landmarks. Fist and move to rotate an object, two open hands to scale, pinch to change material |
+| **Gesture → action bindings** | Every gesture can drive a demo control deck (slides, media player, reactions, snapshots), remappable in the UI |
+| **Live diagnostics** | Top-5 probabilities per hand, FPS, landmark and classifier latency, event log |
+
+The design choices (pinch-to-click, immediate visual feedback, dwell confirmation, jitter filtering, on-device processing) follow current XR hand-tracking guidance. See [docs/RESEARCH.md](docs/RESEARCH.md) for the survey of papers, products and open-source projects behind them.
+
+## Results
+
+All test numbers are on **HaGRIDv2 test subjects never seen in training**, with subject-disjoint splits (see [docs/DATA.md](docs/DATA.md)).
+
+| Model | Test set | Accuracy | Macro precision |
+|---|---|---|---|
+| One-hand, 26 gestures | 26 gestures + no gesture (153,755 hands) | **98.8%** | **98.9%** |
+| | Open-set: also rejects halves of two-hand gestures (201,133 hands) | 94.7% | 95.7% |
+| Two-hand, 7 gestures | Pairs of hands (44,195 pairs) | **99.3%** | **98.0%** |
+| One-hand, original 6 gestures | 6 + no gesture (60,488 hands) | 99.4% | 99.2% |
+
+- **Fairness:** gesture recall stays within 98.1–99.0% across the subjects' auto-annotated gender and race groups.
+- **Calibration:** expected calibration error is 0.014.
+- **Speed:** the classifiers run in about 1 ms. End to end, the Python pipeline reaches about 21 FPS on a laptop CPU. In the browser, the hand landmarker uses the GPU (WebGL) when available.
+
+The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Key findings:
+- **Open-set training matters:** training without "other gesture" negatives drops live precision to 32%.
+- **HaGRID's "inverted" classes are back-of-hand views, not upside-down hands.**
+- **HaGRID's official split leaks two subjects between train and test.**
+- **HaGRID mixes image aspect ratios** that its annotations don't record.
+
+## Architecture
+
+```
+camera ─► MediaPipe HandLandmarker (WASM/WebGL) ─► 21 landmarks per hand (2D + 3D world)
+            │
+            ├─► features (67) ─► one-hand MLP ─► temperature + rejection bias ─► EMA smoothing ─┐
+            ├─► pair features (221) ─► two-hand MLP ───────────────────────────────────────────┤
+            ├─► palm trajectory ─► swipes                                                       ├─► dwell ─► events ─► actions
+            ├─► thumb–index distance ─► pinch ─► One Euro cursor ─► click / drag                ┘
+            └─► world landmarks ─► Three.js 3D lab
+```
+
+The models are trained in PyTorch, then exported with BatchNorm folded into the linear layers. In the browser they run in a small, dependency-free JavaScript module. A parity test checks that the JavaScript features and probabilities match Python.
 
 ## Repository layout
 
 ```
-├── data/personal/         # 34 hand-captured photos: an out-of-distribution test set
-├── docs/DATA.md           # dataset statistics, split audit, aspect-ratio analysis
-├── docs/MODEL.md          # method, results, ablations, findings
+├── web/                   # the browser app (no build step)
+│   ├── index.html, css/
+│   ├── js/                # app, engine (dwell/swipe/pinch), features, mlp, scene3d, custom, filters
+│   ├── models/            # exported classifiers (hand.json, pair.json) + parity fixture
+│   └── tests/parity.mjs   # JS vs Python check
+├── src/hgr/               # Python: data, features, training, evaluation, real-time pipeline
+│   ├── hagrid.py, splits.py, features.py, augment.py, pairs.py, labels.py
+│   ├── model.py, train.py, train_pairs.py, evaluate.py, metrics.py
+│   ├── landmarker.py, pipeline.py
+│   └── legacy/            # the original 2024 SSIM template-matching version
+├── scripts/               # download, cache, export, serve, live OpenCV demo, clip recorder/evaluator
+├── docs/                  # DATA.md, MODEL.md, RESEARCH.md, figures
 ├── reports/               # evaluation outputs (JSON)
-├── scripts/               # download, cache building, landmark extraction, figures
-├── src/hgr/
-│   ├── hagrid.py          # HaGRIDv2 annotation loader and cache
-│   ├── features.py        # landmark normalisation and feature vectors
-│   ├── splits.py          # subject-disjoint split checks and splitting
-│   ├── landmarker.py      # MediaPipe Tasks HandLandmarker wrapper
-│   ├── augment.py         # landmark augmentation and aspect-ratio sampling
-│   ├── model.py           # MLP + calibrated classifier checkpoint
-│   ├── train.py, evaluate.py
-│   ├── metrics.py         # accuracy, precision/recall/F1, calibration error
-│   ├── pipeline.py        # real-time pipeline with temporal smoothing
-│   ├── labels.py          # shared class vocabulary
-│   └── legacy/            # original SSIM template-matching baseline
-├── tests/
-└── IMPROVEMENT_PLAN.md
+├── data/personal/         # 34 hand-captured photos used as an extra out-of-distribution check
+└── tests/
 ```
 
-## Results
-
-| Test set | Accuracy | Precision |
-|---|---|---|
-| HaGRIDv2 test, unseen people (60k hands) | 99.4% | 99.2% |
-| HaGRIDv2 open-set test (must also reject 26 other gestures, 201k hands) | 99.0% | 94.2% |
-| Personal photos (unseen person, camera and background) | 93.9% | 100% |
-
-It runs at about 21 FPS end to end on a laptop CPU. See [docs/MODEL.md](docs/MODEL.md) for the method, ablations, findings and caveats.
-
-## Data
-
-The dataset is HaGRIDv2: 1.31M annotated hands with MediaPipe landmarks, split by subject. See [docs/DATA.md](docs/DATA.md) for statistics and findings, including a train/test subject leak in the official split, and evidence that HaGRID mixes image aspect ratios, which the annotations don't record.
-
-## Quickstart
+## Reproduce
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate          # Windows; use `source .venv/bin/activate` elsewhere
-pip install -e ".[legacy,dev]"
+python -m venv .venv && .venv\Scripts\activate        # Windows; source .venv/bin/activate elsewhere
+pip install -e ".[dev]"
+python scripts/download_hagrid.py                      # ~720 MB annotations (with landmarks)
+python scripts/build_hagrid_cache.py                   # 1.31M hands -> data/processed (~30 s)
+python -m hgr.train --classes hagrid --out models/gesture_mlp_hagrid.pt   # ~25 min on a laptop CPU
+python -m hgr.train_pairs                              # two-hand model, ~6 min
+python -m hgr.evaluate --model models/gesture_mlp_hagrid.pt --out reports/metrics_hagrid.json
+python scripts/export_web.py                           # -> web/models
+pytest                                                 # includes the JS/Python parity test (needs Node)
 ```
 
-Train, evaluate and run the landmark classifier (needs the data cache from [docs/DATA.md](docs/DATA.md)):
+## From the 2024 version
 
-```bash
-python -m hgr.train                     # ~10 min on a laptop CPU -> models/gesture_mlp.pt
-python -m hgr.evaluate                  # HaGRID test + personal photos -> reports/metrics.json
-python scripts/live.py                  # live webcam demo
-```
-
-Measure real-time accuracy on your own recorded clips:
-
-```bash
-python scripts/record_clips.py --session yourname_room1   # guided: one 8 s clip per gesture
-python scripts/eval_clips.py                              # frame-level metrics + latency -> reports/realtime_metrics.json
-```
-
-Run the legacy baseline (press `q` to quit):
-
-```bash
-python -m hgr.legacy.ssim_matcher
-```
-
-Run the tests:
-
-```bash
-pytest
-```
-
-## Baseline: SSIM template matching (2024)
-
-Each detected hand is cropped, converted to 50×50 grayscale and compared with every reference photo using the structural similarity index (SSIM). The closest photo's label wins. The on-screen number is the SSIM score, **not** a confidence or an accuracy.
-
-Known limitations, which are what motivate the rebuild:
-- Only 34 reference images, from one person against one background.
-- Sensitive to lighting, background, scale, rotation and which hand is used.
-- No rejection class, so every hand gets one of the six labels.
-- Depends on the legacy `mediapipe.solutions` API (pinned to `mediapipe==0.10.14`).
-
-## Roadmap
-
-1. **Data:** HaGRIDv2 landmark annotations, with subject-disjoint splits.
-2. **Model:** a landmark MLP/Transformer classifier with `no_gesture` rejection.
-3. **Real-time app:** MediaPipe Tasks HandLandmarker, temporal smoothing, 30+ FPS on CPU.
-4. **Benchmarks:** image models, YOLO26, robustness and fairness slices.
-5. **Deployment:** ONNX/INT8 and a browser demo.
+The original class project compared 50×50 grayscale crops against 34 photos of one person using SSIM (structural similarity). It recognised 6 gestures, had no way to reject other hand shapes, and its on-screen "accuracy" was really a similarity score. That version is kept in `src/hgr/legacy/` as a baseline.
 
 ## Acknowledgements
 
-Training data: **HaGRIDv2**, by Nuzhdin et al., *HaGRIDv2: 1M Images for Static and Dynamic Hand Gesture Recognition* ([arXiv:2412.01508](https://arxiv.org/abs/2412.01508)). It is licensed under a variant of CC BY-SA 4.0; see the [dataset licence](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf).
+- **Data:** HaGRIDv2, by Nuzhdin et al. ([arXiv:2412.01508](https://arxiv.org/abs/2412.01508)), licensed under a variant of CC BY-SA 4.0 ([terms](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf)).
+- **Hand tracking:** [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) by Google.
+- **3D:** [Three.js](https://threejs.org).

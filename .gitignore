@@ -21,7 +21,7 @@ data/processed/*
 !data/processed/hagrid_aspect_sample.json
 
 # Training outputs & weights (published to the Hugging Face Hub instead)
-models/
+/models/
 runs/
 mlruns/
 wandb/
@@ -38,3 +38,9 @@ checkpoints/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local test media for the web app
+web/test-media/
+
+# Local editor/agent config
+.claude/

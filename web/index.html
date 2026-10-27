@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gesture Studio</title>
+  <meta name="description" content="Real-time hand gesture recognition in the browser: 33 gestures, two-hand gestures, swipes, air cursor and custom gestures, fully on-device.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">✋</span>
+      <div>
+        <h1>Gesture Studio</h1>
+        <p class="tagline">Real-time hand gesture recognition · 33 gestures · on-device</p>
+      </div>
+    </div>
+    <div class="status" aria-live="polite">
+      <span class="chip" id="status-model"><i></i>Models</span>
+      <span class="chip" id="status-camera"><i></i>Camera</span>
+      <span class="chip" id="status-delegate"><i></i>—</span>
+      <span class="chip privacy" title="Video is processed in this browser tab and never uploaded.">🔒 Nothing leaves your device</span>
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle light / dark theme">◐</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage-col">
+      <div class="stage" id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="hud">
+          <div class="now" id="now">
+            <span class="now-icon" id="now-icon">·</span>
+            <div>
+              <div class="now-name" id="now-name">Show your hand</div>
+              <div class="now-sub" id="now-sub">Waiting for camera</div>
+            </div>
+            <svg class="hold" viewBox="0 0 36 36" aria-hidden="true"><circle class="hold-bg" cx="18" cy="18" r="15"/><circle class="hold-fg" id="hold-ring" cx="18" cy="18" r="15"/></svg>
+          </div>
+          <div class="fps" id="fps">— FPS</div>
+        </div>
+        <div class="start" id="start">
+          <div class="start-card">
+            <div class="start-icon">✋</div>
+            <h2>Gesture Studio</h2>
+            <p>Recognises 26 one-hand gestures, 7 two-hand gestures and swipes in real time. Pinch to click anything on this page.</p>
+            <button class="primary" id="start-btn" disabled>Loading models…</button>
+            <p class="fine">Your camera feed is processed locally and never uploaded.</p>
+          </div>
+        </div>
+      </div>
+
+      <section class="deck" aria-label="Gesture-controlled demo">
+        <header class="deck-head">
+          <h2>Control deck</h2>
+          <p>Every widget here is driven by gestures. Change the bindings in the Actions tab.</p>
+        </header>
+        <div class="deck-grid">
+          <div class="card lab">
+            <div class="lab-head">
+              <b>3D lab</b>
+              <span class="muted">✊ grab and move to rotate · 🖐 🖐 two open hands to scale · 🤏 pinch to change material · drag to orbit</span>
+            </div>
+            <canvas id="lab3d" aria-label="3D view of the tracked hand and a gesture-controlled object"></canvas>
+          </div>
+          <div class="card slides">
+            <div class="slide-track" id="slide-track"></div>
+            <div class="slide-nav">
+              <button data-action="prev_slide" aria-label="Previous slide">‹</button>
+              <span id="slide-dots"></span>
+              <button data-action="next_slide" aria-label="Next slide">›</button>
+            </div>
+          </div>
+          <div class="card media">
+            <div class="media-top">
+              <button class="play" data-action="play_pause" id="play-btn" aria-label="Play or pause">▶</button>
+              <div>
+                <div class="media-title">Lo-fi focus mix</div>
+                <div class="media-sub" id="media-state">Paused</div>
+              </div>
+              <button class="mute" data-action="mute" id="mute-btn" aria-label="Mute">🔊</button>
+            </div>
+            <div class="eq" id="eq" aria-hidden="true"></div>
+            <div class="volume" id="volume" data-pinch-drag="volume" aria-label="Volume">
+              <div class="volume-fill" id="volume-fill"></div>
+            </div>
+            <div class="media-sub">Volume <span id="volume-label">60%</span> · pinch and drag the bar</div>
+          </div>
+          <div class="card reactions">
+            <button data-action="like"><span>👍</span><b id="likes">0</b></button>
+            <button data-action="dislike"><span>👎</span><b id="dislikes">0</b></button>
+            <button data-action="celebrate"><span>🎉</span><b>Party</b></button>
+            <button data-action="snapshot"><span>📸</span><b>Snap</b></button>
+          </div>
+          <div class="card snaps">
+            <div class="snaps-head">Snapshots <button class="link" data-action="reset_deck">Reset deck</button></div>
+            <div class="snap-strip" id="snap-strip"><span class="muted">Make the OK sign 👌 or a two-hand frame 🖼️</span></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="live">Live</button>
+        <button role="tab" aria-selected="false" data-tab="actions">Actions</button>
+        <button role="tab" aria-selected="false" data-tab="teach">Teach</button>
+        <button role="tab" aria-selected="false" data-tab="gestures">Gestures</button>
+        <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
+      </nav>
+
+      <section class="tab-body" data-panel="live">
+        <h3>Prediction</h3>
+        <div id="hands-view" class="hands-view"><p class="muted">No hands in view.</p></div>
+        <h3>Performance</h3>
+        <div class="metrics">
+          <div><span>FPS</span><b id="m-fps">—</b></div>
+          <div><span>Landmarks</span><b id="m-land">—</b></div>
+          <div><span>Classify</span><b id="m-cls">—</b></div>
+          <div><span>Hands</span><b id="m-hands">0</b></div>
+        </div>
+        <canvas id="sparkline" class="sparkline" height="48"></canvas>
+        <h3>Events</h3>
+        <ol class="log" id="log"></ol>
+      </section>
+
+      <section class="tab-body" data-panel="actions" hidden>
+        <h3>Gesture bindings</h3>
+        <p class="muted">Hold a gesture for a moment to trigger its action. Swipes trigger immediately.</p>
+        <div class="bindings" id="bindings"></div>
+      </section>
+
+      <section class="tab-body" data-panel="teach" hidden>
+        <h3>Teach a new gesture</h3>
+        <p class="muted">Name it, press Record, and hold the pose with small movements for 3 seconds. It's recognised from the model's learned hand-shape embedding and stored only in this browser.</p>
+        <div class="teach-row">
+          <input id="teach-name" placeholder="e.g. Spider-Man" maxlength="24">
+          <button class="primary" id="teach-btn">Record</button>
+        </div>
+        <div class="teach-status" id="teach-status"></div>
+        <ul class="custom-list" id="custom-list"></ul>
+      </section>
+
+      <section class="tab-body" data-panel="gestures" hidden>
+        <h3>Supported gestures</h3>
+        <div class="gesture-grid" id="gesture-grid"></div>
+      </section>
+
+      <section class="tab-body" data-panel="settings" hidden>
+        <h3>Recognition</h3>
+        <label class="range">Confidence threshold <output id="o-conf"></output><input type="range" id="s-conf" min="0.3" max="0.95" step="0.05"></label>
+        <label class="range">Hold to trigger (ms) <output id="o-hold"></output><input type="range" id="s-hold" min="150" max="1200" step="50"></label>
+        <label class="range">Temporal smoothing <output id="o-smooth"></output><input type="range" id="s-smooth" min="0" max="0.9" step="0.05"></label>
+        <label class="range">Rejection strictness <output id="o-reject"></output><input type="range" id="s-reject" min="-2" max="2" step="0.25"></label>
+        <h3>Features</h3>
+        <label class="toggle"><input type="checkbox" id="s-twohand"> Two-hand gestures</label>
+        <label class="toggle"><input type="checkbox" id="s-swipes"> Swipe gestures</label>
+        <label class="toggle"><input type="checkbox" id="s-cursor"> Air cursor (pinch to click)</label>
+        <label class="toggle"><input type="checkbox" id="s-mirror"> Mirror view</label>
+        <label class="toggle"><input type="checkbox" id="s-skeleton"> Draw hand skeleton</label>
+        <h3>About</h3>
+        <p class="muted small">MediaPipe HandLandmarker → 67 landmark features → MLPs trained on HaGRIDv2 (1.3M hands, 99.4% test accuracy) running in plain JavaScript. <a href="https://github.com/Harishik/Hand-Gesture-Recognition" target="_blank" rel="noopener">Source &amp; method</a></p>
+      </section>
+    </aside>
+  </main>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="burst" id="burst" aria-hidden="true"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
