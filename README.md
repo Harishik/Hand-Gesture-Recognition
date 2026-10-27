@@ -1,16 +1,16 @@
-# Gesture Studio: real-time hand gesture recognition
+# Gesture Studio 3D: real-time hand gesture recognition
 
-A real-time hand gesture system that runs entirely in the browser, trained on 1.3M hands from HaGRIDv2:
-- **33 gestures:** 26 one-hand and 7 two-hand.
-- **Swipes and an air cursor:** swipe left, right, up or down; point and pinch to click.
-- **Custom gestures:** teach a new one from a 3-second recording.
-- **3D hand view:** your hand rendered live in 3D, driving a gesture-controlled object.
-
-Everything runs on-device; no video leaves the browser.
+A real-time hand gesture system with a full-screen **Three.js 3D interface**, trained on 1.3M hands from HaGRIDv2. Everything runs in the browser, on-device; no video leaves the tab.
+- **The scene:** your camera feed is a screen inside a 3D scene, and your tracked hands are rendered over it as glowing 3D skeletons with depth, bloom and fingertip light trails.
+- **Gesture ring:** a 3D carousel of all 33 gestures. The one you're making flies forward.
+- **Hologram:** a 3D object you control with your hands. A fist grabs and rotates it, two open hands scale it, and a pinch recolours it.
+- **Effects:** every recognised gesture fires a particle burst, and the camera follows your hand with a slight parallax.
 
 ```bash
 python scripts/serve_web.py      # then open http://localhost:8765 and press "Start camera"
 ```
+
+`classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings.
 
 ## What it does
 
@@ -22,7 +22,7 @@ python scripts/serve_web.py      # then open http://localhost:8765 and press "St
 | **Air cursor** | Index fingertip with a One Euro filter; pinch to click any control, pinch-drag sliders |
 | **Dwell to confirm** | A gesture must be held for 450 ms to fire, once per hold; avoids accidental triggers |
 | **Teach a gesture** | Few-shot nearest neighbour in the MLP's learned embedding space; saved in the browser |
-| **3D lab** (Three.js) | Live 3D hand skeleton from MediaPipe world landmarks. Fist and move to rotate an object, two open hands to scale, pinch to change material |
+| **3D interface** (Three.js, `index.html`) | Video screen in 3D space, depth-aware neon hand skeletons (bloom + light trails), 33-gesture carousel, hand-controlled hologram, particle bursts, parallax camera |
 | **Gesture → action bindings** | Every gesture can drive a demo control deck (slides, media player, reactions, snapshots), remappable in the UI |
 | **Live diagnostics** | Top-5 probabilities per hand, FPS, landmark and classifier latency, event log |
 
@@ -67,8 +67,9 @@ The models are trained in PyTorch, then exported with BatchNorm folded into the 
 
 ```
 ├── web/                   # the browser app (no build step)
-│   ├── index.html, css/
-│   ├── js/                # app, engine (dwell/swipe/pinch), features, mlp, scene3d, custom, filters
+│   ├── index.html         # 3D studio (Three.js) · classic.html: 2D dashboard
+│   ├── css/
+│   ├── js/                # studio3d (3D app), tracker, engine (dwell/swipe/pinch), features, mlp, custom, filters, app (classic)
 │   ├── models/            # exported classifiers (hand.json, pair.json) + parity fixture
 │   └── tests/parity.mjs   # JS vs Python check
 ├── src/hgr/               # Python: data, features, training, evaluation, real-time pipeline
