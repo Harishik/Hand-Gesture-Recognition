@@ -7,22 +7,22 @@ const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
 ];
-const FINGER_COLORS = [0xf472b6, 0x38bdf8, 0xa78bfa, 0x34d399, 0xfbbf24];
+const FINGER_COLORS = [0xece8e1, 0xece8e1, 0xece8e1, 0xece8e1, 0xece8e1]; // bone white, as in the 3D studio
 const fingerOf = (i) => (i === 0 ? 0 : Math.floor((i - 1) / 4));
 const GRAB = new Set(["fist", "grabbing", "grip"]);
 const OPEN = new Set(["palm", "stop", "four", "stop_inverted"]);
 const MATERIALS = [
-  { color: 0x38bdf8, metalness: 0.6, roughness: 0.25 },
-  { color: 0xa78bfa, metalness: 0.2, roughness: 0.5 },
-  { color: 0xf472b6, metalness: 0.9, roughness: 0.15 },
-  { color: 0x34d399, metalness: 0.4, roughness: 0.35 },
+  { color: 0xece8e1, metalness: 0.05, roughness: 0.55 },
+  { color: 0xffb25c, metalness: 0.2, roughness: 0.35 },
+  { color: 0x7fa8ff, metalness: 0.35, roughness: 0.3 },
+  { color: 0x3a3f47, metalness: 0.8, roughness: 0.25 },
 ];
 
 export class HandScene {
   constructor(canvas) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.01, 10);
     this.camera.position.set(0, 0.05, 0.62);
@@ -34,11 +34,11 @@ export class HandScene {
     const key = new THREE.DirectionalLight(0xffffff, 1.6);
     key.position.set(0.4, 0.6, 0.8);
     this.scene.add(key);
-    const rim = new THREE.PointLight(0xa78bfa, 2.5, 3);
+    const rim = new THREE.PointLight(0x9fb8ff, 1.5, 3);
     rim.position.set(-0.5, -0.2, -0.4);
     this.scene.add(rim);
 
-    const grid = new THREE.GridHelper(1.2, 24, 0x38bdf8, 0x1e293b);
+    const grid = new THREE.GridHelper(1.2, 24, 0x3a3f47, 0x2b2f36);
     grid.position.y = -0.18;
     grid.material.transparent = true;
     grid.material.opacity = 0.35;

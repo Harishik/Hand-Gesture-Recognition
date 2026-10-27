@@ -534,6 +534,7 @@ Promise.all([tracker.load(), loadPoses(), document.fonts.ready])
     buildRing();
     btn.disabled = false;
     btn.textContent = "Turn on camera";
+    if (new URLSearchParams(location.search).has("autostart")) queueMicrotask(() => btn.click()); // demos and screenshots
     $("start-hint").textContent = `Hand tracking runs on your ${delegate === "GPU" ? "graphics card" : "processor"}. Works best with your hand about an arm's length away.`;
   })
   .catch((err) => {
@@ -556,6 +557,7 @@ btn.addEventListener("click", async () => {
   } catch (err) {
     btn.disabled = false;
     btn.textContent = "Turn on camera";
+    if (new URLSearchParams(location.search).has("autostart")) queueMicrotask(() => btn.click()); // demos and screenshots
     $("start-hint").textContent = "Camera access was blocked. Allow it in the address bar, then try again.";
     console.error(err);
   }

@@ -2,6 +2,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 import { CustomGestures } from "./custom.js";
 import { DEFAULT_SETTINGS, GestureEngine } from "./engine.js";
 import { GESTURES, gestureInfo } from "./gestures-meta.js";
+import { glyphURL, loadPoses } from "./glyph.js";
 import { GestureModel } from "./mlp.js";
 import { HandScene } from "./scene3d.js";
 
@@ -12,8 +13,9 @@ const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
   [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
 ];
-const FINGER_COLORS = ["#f472b6", "#38bdf8", "#a78bfa", "#34d399", "#fbbf24"]; // thumb .. pinky
-const fingerOf = (i) => (i === 0 ? -1 : Math.floor((i - 1) / 4));
+const CHANNEL = { Left: "#7fa8ff", Right: "#ffb25c" }; // left / right hand, as in the 3D studio
+const channelOf = (handedness) => CHANNEL[handedness] ?? "#ece8e1";
+const icon = (id, size = 22, color) => `<img class="glyph" src="${glyphURL(id, size, color)}" alt="" width="${size}" height="${size}">`;
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -23,9 +25,12 @@ const els = {
 };
 const ctx = els.overlay.getContext("2d");
 const lab = new HandScene($("lab3d"));
+// Render the 3D lab only while it is on screen, so it doesn't compete with hand tracking for the GPU.
+let labVisible = false;
+new IntersectionObserver(([entry]) => (labVisible = entry.isIntersecting)).observe($("lab3d"));
 (function renderLab() {
   requestAnimationFrame(renderLab);
-  lab.render();
+  if (labVisible) lab.render();
 })();
 
 // ---------------------------------------------------------------- actions & the demo deck
@@ -40,7 +45,7 @@ const ACTIONS = {
   like: "Like",
   dislike: "Dislike",
   snapshot: "Take snapshot",
-  celebrate: "Celebrate 🎉",
+  celebrate: "Celebrate",
   toggle_theme: "Toggle theme",
   toggle_cursor: "Toggle air cursor",
   reset_deck: "Reset deck",
@@ -63,11 +68,11 @@ const store = {
 let bindings = { ...DEFAULT_BINDINGS, ...store.get(BINDINGS_KEY, {}) };
 
 const SLIDES = [
-  ["Swipe to navigate", "Open your hand and swipe left or right.", "#0ea5e9", "#6366f1"],
-  ["33 gestures", "26 one-hand and 7 two-hand gestures from HaGRIDv2.", "#8b5cf6", "#ec4899"],
-  ["Air cursor", "Point with your index finger, pinch to click.", "#10b981", "#0ea5e9"],
-  ["Teach it", "Record a custom gesture in 3 seconds.", "#f59e0b", "#ef4444"],
-  ["On-device", "Nothing leaves your browser.", "#14b8a6", "#8b5cf6"],
+  ["Swipe to navigate", "Open your hand and swipe left or right.", "#2b2f36", "#3a3f47"],
+  ["33 gestures", "26 one-hand and 7 two-hand gestures from HaGRIDv2.", "#3a3f47", "#2b2f36"],
+  ["Air cursor", "Point with your index finger, pinch to click.", "#2b2f36", "#3a3f47"],
+  ["Teach it", "Record a custom gesture in 3 seconds.", "#3a3f47", "#2b2f36"],
+  ["On-device", "Video never leaves your browser.", "#2b2f36", "#3a3f47"],
 ];
 const deck = { slide: 0, playing: false, volume: 0.6, muted: false, likes: 0, dislikes: 0 };
 
@@ -86,9 +91,9 @@ function renderDeck() {
     el.style.opacity = offset === 0 ? 1 : 0.4;
   });
   [...$("slide-dots").children].forEach((d, i) => d.classList.toggle("on", i === deck.slide));
-  $("play-btn").textContent = deck.playing ? "❚❚" : "▶";
+  $("play-btn").textContent = deck.playing ? "Pause" : "Play";
   $("media-state").textContent = deck.playing ? (deck.muted ? "Playing · muted" : "Playing") : "Paused";
-  $("mute-btn").textContent = deck.muted ? "🔇" : "🔊";
+  $("mute-btn").textContent = deck.muted ? "Unmute" : "Mute";
   $("volume-fill").style.width = `${deck.volume * 100}%`;
   $("volume-label").textContent = `${Math.round(deck.volume * 100)}%`;
   $("likes").textContent = deck.likes;
@@ -113,7 +118,7 @@ function toast(text) {
 function celebrate() {
   for (let i = 0; i < 24; i++) {
     const s = document.createElement("span");
-    s.textContent = ["🎉", "✨", "💖", "🎊", "⭐"][i % 5];
+    s.style.background = ["#ece8e1", "#ffb25c", "#7fa8ff"][i % 3];
     s.style.left = `${Math.random() * 100}%`;
     s.style.top = `${70 + Math.random() * 30}%`;
     s.style.animationDelay = `${Math.random() * 0.4}s`;
@@ -223,9 +228,9 @@ function renderBindings() {
   const all = [...ids, ...custom.items.map((g) => g.id)];
   $("bindings").innerHTML = all
     .map((id) => {
-      const info = id.startsWith("custom:") ? { icon: "✦", name: custom.items.find((g) => g.id === id).name } : gestureInfo(id);
+      const info = labelInfo(id);
       const options = Object.entries(ACTIONS).map(([a, label]) => `<option value="${a}" ${bindings[id] === a ? "selected" : ""}>${label}</option>`).join("");
-      return `<label class="binding"><span>${info.icon}</span>${info.name}<select data-gesture="${id}">${options}</select></label>`;
+      return `<label class="binding">${icon(id)}${info.name}<select data-gesture="${id}">${options}</select></label>`;
     })
     .join("");
   $("bindings").querySelectorAll("select").forEach((s) =>
@@ -241,14 +246,14 @@ function renderGestureGrid() {
     .filter(([id]) => id !== "no_gesture")
     .map(([id, g]) => {
       const badge = g.twoHanded ? '<span class="badge">2 hands</span>' : g.motion ? '<span class="badge">motion</span>' : "";
-      return `<div class="g-card" data-g="${id}"><span>${g.icon}</span><b>${g.name}${badge}</b><small>${g.hint}</small></div>`;
+      return `<div class="g-card" data-g="${id}">${icon(id, 40)}<b>${g.name}${badge}</b><small>${g.hint}</small></div>`;
     })
     .join("");
 }
 
 function renderCustomList() {
   $("custom-list").innerHTML = custom.items.length
-    ? custom.items.map((g) => `<li><span>✦ <b>${g.name}</b> <small class="muted">${g.samples.length} samples</small></span><button class="link" data-remove="${g.id}">Remove</button></li>`).join("")
+    ? custom.items.map((g) => `<li><span>${icon(g.id, 18)} <b>${g.name}</b> <small class="muted">${g.samples.length} samples</small></span><button class="link" data-remove="${g.id}">Remove</button></li>`).join("")
     : '<li class="muted">No custom gestures yet.</li>';
   $("custom-list").querySelectorAll("[data-remove]").forEach((b) =>
     b.addEventListener("click", () => { custom.remove(b.dataset.remove); renderCustomList(); renderBindings(); }),
@@ -300,22 +305,19 @@ function drawHands(state) {
   for (const hand of state.hands) {
     const pts = hand.landmarks.map(([x, y]) => [x * w, y * h]);
     ctx.lineCap = "round";
-    ctx.shadowBlur = 12 * scale;
+    const color = channelOf(hand.handedness);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3 * scale;
+    ctx.beginPath();
     for (const [a, b] of CONNECTIONS) {
-      const color = FINGER_COLORS[Math.max(fingerOf(b), 0)];
-      ctx.strokeStyle = color;
-      ctx.shadowColor = color;
-      ctx.lineWidth = 3.5 * scale;
-      ctx.beginPath();
       ctx.moveTo(...pts[a]);
       ctx.lineTo(...pts[b]);
-      ctx.stroke();
     }
-    ctx.shadowBlur = 0;
+    ctx.stroke();
+    ctx.fillStyle = "#ece8e1";
     pts.forEach(([x, y], i) => {
-      ctx.fillStyle = i === 0 ? "#ffffff" : FINGER_COLORS[fingerOf(i)];
       ctx.beginPath();
-      ctx.arc(x, y, (i % 4 === 0 ? 5 : 3.5) * scale, 0, Math.PI * 2);
+      ctx.arc(x, y, (i % 4 === 0 ? 4.5 : 3) * scale, 0, Math.PI * 2);
       ctx.fill();
     });
     if (hand.pinch?.active) {
@@ -331,18 +333,18 @@ function drawHands(state) {
     const info = labelInfo(id);
     const minY = Math.min(...pts.map((p) => p[1]));
     const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length;
-    const text = `${info.icon} ${info.name}`;
-    ctx.font = `600 ${15 * scale}px Inter, sans-serif`;
+    const text = info.name;
+    ctx.font = `700 ${16 * scale}px "Bricolage Grotesque", sans-serif`;
     const tw = ctx.measureText(text).width + 18 * scale;
     const y = Math.max(minY - 34 * scale, 6);
-    ctx.fillStyle = id === "no_gesture" ? "rgba(8,12,20,0.55)" : "rgba(8,12,20,0.78)";
+    ctx.fillStyle = "rgba(30,33,38,0.9)";
     roundRect(cx - tw / 2, y, tw, 26 * scale, 13 * scale);
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.fillText(text, cx - tw / 2 + 9 * scale, y + 18 * scale);
     const hold = hand.pair?.hold ?? hand.hold ?? 0;
     if (id !== "no_gesture" && hold > 0) {
-      ctx.fillStyle = "#38bdf8";
+      ctx.fillStyle = color;
       roundRect(cx - tw / 2, y + 23 * scale, tw * hold, 3 * scale, 2 * scale);
       ctx.fill();
     }
@@ -350,7 +352,7 @@ function drawHands(state) {
   if (state.pair && state.hands.length >= 2) {
     const [a, b] = state.hands;
     ctx.setLineDash([6 * scale, 6 * scale]);
-    ctx.strokeStyle = "rgba(167,139,250,0.9)";
+    ctx.strokeStyle = "rgba(236,232,225,0.7)";
     ctx.lineWidth = 2 * scale;
     ctx.beginPath();
     ctx.moveTo(a.landmarks[0][0] * w, a.landmarks[0][1] * h);
@@ -368,7 +370,7 @@ function roundRect(x, y, w, h, r) {
 function labelInfo(id) {
   if (id?.startsWith("custom:")) {
     const g = custom.items.find((c) => c.id === id);
-    return { icon: "✦", name: g ? g.name : id };
+    return { name: g ? g.name : id };
   }
   return gestureInfo(id);
 }
@@ -380,8 +382,8 @@ let lastPanel = 0;
 function updatePanels(state, t) {
   const primary = state.pair ? null : state.hands[0];
   const id = state.pair?.id ?? primary?.label ?? null;
-  const info = id ? labelInfo(id) : { icon: "·", name: "Show your hand" };
-  els.nowIcon.textContent = info.icon;
+  const info = id ? labelInfo(id) : { name: "Show your hand" };
+  els.nowIcon.innerHTML = id && id !== "no_gesture" ? icon(id, 40, channelOf(primary?.handedness)) : "";
   els.nowName.textContent = state.hands.length ? info.name : "Show your hand";
   const conf = state.pair?.confidence ?? primary?.confidence;
   els.nowSub.textContent = state.hands.length
@@ -407,7 +409,7 @@ function updatePanels(state, t) {
     return;
   }
   const pair = state.pair
-    ? `<div class="pair-banner">${labelInfo(state.pair.id).icon} ${labelInfo(state.pair.id).name} · two-hand · ${Math.round(state.pair.confidence * 100)}%</div>`
+    ? `<div class="pair-banner">${icon(state.pair.id, 22)} ${labelInfo(state.pair.id).name}, two-hand, ${Math.round(state.pair.confidence * 100)}%</div>`
     : "";
   els.handsView.innerHTML =
     pair +
@@ -416,7 +418,7 @@ function updatePanels(state, t) {
         const bars = h.top
           .map((c) => {
             const g = gestureInfo(c.id);
-            return `<div class="bar"><span>${g.icon}</span><div><div class="name">${g.name}</div><div class="track"><div class="fill" style="width:${(c.p * 100).toFixed(1)}%"></div></div></div><span class="pct">${(c.p * 100).toFixed(0)}%</span></div>`;
+            return `<div class="bar">${icon(c.id, 20, "#8e939c")}<div><div class="name">${g.name}</div><div class="track"><div class="fill" style="width:${(c.p * 100).toFixed(1)}%"></div></div></div><span class="pct">${(c.p * 100).toFixed(0)}%</span></div>`;
           })
           .join("");
         const customLine = h.custom ? `<div class="bar"><span>✦</span><div><div class="name">custom: ${h.custom.name}</div></div><span class="pct">${(h.custom.similarity * 100).toFixed(0)}%</span></div>` : "";
@@ -448,7 +450,7 @@ function logEvent(ev, action) {
   const info = labelInfo(ev.id);
   const li = document.createElement("li");
   const time = new Date().toLocaleTimeString([], { hour12: false });
-  li.innerHTML = `<span>${info.icon}</span><span>${info.name}${action ? `<br><span class="act">→ ${ACTIONS[action]}</span>` : ""}</span><time>${time}</time>`;
+  li.innerHTML = `${icon(ev.id, 20)}<span>${info.name}${action ? `<br><span class="act">${ACTIONS[action]}</span>` : ""}</span><time>${time}</time>`;
   els.log.prepend(li);
   while (els.log.children.length > 30) els.log.lastChild.remove();
 }
@@ -511,6 +513,7 @@ async function loadModels() {
     d.lastChild.textContent = delegate;
     els.startBtn.disabled = false;
     els.startBtn.textContent = "Start camera";
+    if (new URLSearchParams(location.search).has("autostart")) startCamera(); // demos and screenshots
   } catch (err) {
     status.className = "chip err";
     els.startBtn.textContent = "Failed to load models";
@@ -579,7 +582,7 @@ function loop(t) {
     if (ev.type !== "gesture") continue;
     const action = bindings[ev.id];
     const ran = action && action !== "none" && runAction(action);
-    if (ran) toast(`${labelInfo(ev.id).icon} ${labelInfo(ev.id).name} → ${ACTIONS[action]}`);
+    if (ran) toast(`${labelInfo(ev.id).name}: ${ACTIONS[action]}`);
     logEvent(ev, ran ? action : null);
     els.now.classList.remove("fired");
     void els.now.offsetWidth;
@@ -608,6 +611,8 @@ function loop(t) {
 settings = { ...settings, ...DEFAULT_SETTINGS, ...store.get(SETTINGS_KEY, {}) };
 bindSettings();
 syncSettings();
+await loadPoses();
+document.querySelectorAll("img[data-glyph]").forEach((img) => (img.src = glyphURL(img.dataset.glyph, 26)));
 renderDeck();
 renderGestureGrid();
 renderBindings();
