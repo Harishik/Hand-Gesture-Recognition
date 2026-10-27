@@ -16,6 +16,9 @@ dist/
 # Data: large datasets are downloaded, never committed. The small personal test set is tracked.
 data/*
 !data/personal/
+!data/processed/
+data/processed/*
+!data/processed/hagrid_aspect_sample.json
 
 # Training outputs & weights (published to the Hugging Face Hub instead)
 runs/
