@@ -12,6 +12,8 @@ dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.9",
     "mediapipe>=0.10.14",
+    "torch>=2.4",
+    "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]

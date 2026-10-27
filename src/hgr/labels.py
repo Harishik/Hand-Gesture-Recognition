@@ -22,3 +22,7 @@ PERSONAL_TO_HAGRID = {
 }
 
 CLASS_TO_INDEX = {name: i for i, name in enumerate(TARGET_CLASSES)}
+
+# HaGRID classes that count as a target class. HaGRID's "_inverted" variants are the same hand shape with the back
+# of the hand towards the camera (not upside down); a V sign is a peace sign either way.
+HAGRID_ALIASES = {"peace_inverted": "peace"}
