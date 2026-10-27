@@ -1,0 +1,36 @@
+# Environments & IDE
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Data: large datasets are downloaded, never committed. The small personal test set is tracked.
+data/*
+!data/personal/
+
+# Training outputs & weights (published to the Hugging Face Hub instead)
+runs/
+mlruns/
+wandb/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.task
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hgr"
+version = "0.1.0"
+description = "Real-time hand gesture recognition: landmark-based classifiers trained on HaGRIDv2"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+]
+
+[project.optional-dependencies]
+# The 2024 SSIM baseline relies on cvzone, which needs the legacy mediapipe.solutions API (removed in later releases).
+legacy = [
+    "cvzone==1.6.1",
+    "mediapipe==0.10.14",
+    "scikit-image>=0.23",
+]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
