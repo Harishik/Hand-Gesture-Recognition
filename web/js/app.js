@@ -7,7 +7,7 @@ import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { HandScene } from "./scene3d.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { announce, bindHelp, notice, session, typing } from "./ui.js";
+import { announce, bindHelp, notice, session, showProblem, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -935,12 +935,6 @@ function setCam(text, tone) {
 function setBoot(text, tone) {
   $("boot-state").textContent = text;
   $("boot-dot").className = `dot ${tone ?? ""}`;
-}
-function showProblem(problem) {
-  $("problem").hidden = !problem;
-  if (!problem) return;
-  $("problem-title").textContent = problem.title;
-  $("problem-body").textContent = problem.body;
 }
 
 const ready = tracker.load((text) => setBoot(text, "busy"));

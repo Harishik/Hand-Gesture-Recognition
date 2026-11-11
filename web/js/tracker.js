@@ -104,10 +104,16 @@ export class HandTracker {
       this.video.loop = true;
     } else {
       if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("No camera API"), { name: "InsecureContextError" });
-      this.video.srcObject = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
-        audio: false,
-      });
+      const asked = performance.now();
+      try {
+        this.video.srcObject = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+          audio: false,
+        });
+      } catch (err) {
+        err.instant = performance.now() - asked < 250; // no prompt was shown
+        throw err;
+      }
       // Unplugged camera, revoked permission, or another app taking the device.
       this.video.srcObject.getVideoTracks().forEach((track) => track.addEventListener("ended", () => this.onEnded?.(), { once: true }));
     }
@@ -278,23 +284,55 @@ function barsIn(video) {
   return { x: box.x + ix, y: box.y + iy, w: box.w - 2 * ix, h: box.h - 2 * iy };
 }
 
-/** Plain-language explanation of a getUserMedia failure: { title, body } for the onboarding screen. */
+/**
+ * True when the page runs inside another application's built-in browser (Electron shells, in-app previews, embedded
+ * frames that are not allowed to use the camera). Those block cameras no matter what the page does.
+ */
+export function embeddedBrowser() {
+  const ua = navigator.userAgent;
+  if (/Electron\/|\bClaude\/\d|; wv\)|FBAN|FBAV|Instagram|Line\//.test(ua)) return true;
+  try {
+    if (window.top !== window && document.featurePolicy && !document.featurePolicy.allowsFeature("camera")) return true;
+  } catch {
+    return true; // cross-origin frame
+  }
+  return false;
+}
+
+/**
+ * Plain-language explanation of a getUserMedia failure: { title, body, openElsewhere } for the onboarding screen.
+ * openElsewhere: offer "Open in your browser" / "Copy link", because nothing on this page can fix it.
+ */
 export function describeCameraError(err) {
+  const site = location.host || "this site";
   switch (err?.name) {
     case "NotAllowedError":
     case "SecurityError":
+      if (embeddedBrowser()) {
+        return {
+          title: "This window can't use your camera",
+          body: "You're viewing Gesture Studio inside an app's built-in browser, which doesn't allow camera access. Open it in Chrome, Edge or Safari, or watch the demo here.",
+          openElsewhere: true,
+        };
+      }
+      if (err.instant) {
+        return {
+          title: "The camera is blocked for this site",
+          body: `Your browser blocked the camera for ${site} earlier, so it didn't ask this time. Click the camera or lock icon at the left of the address bar, set Camera to Allow, then reload the page.`,
+        };
+      }
       return {
-        title: "Camera access is blocked",
-        body: "Click the camera icon in the address bar, choose Allow, then try again. Or watch the demo to see it working.",
+        title: "Camera access was declined",
+        body: "No problem: click the camera icon in the address bar, choose Allow, then try again. Or watch the demo instead.",
       };
     case "NotFoundError":
     case "OverconstrainedError":
       return { title: "No camera found", body: "Plug in a webcam and try again, or watch the demo instead." };
     case "NotReadableError":
     case "AbortError":
-      return { title: "The camera is busy", body: "Another app or tab is using it. Close that, then try again." };
+      return { title: "The camera is busy", body: "Another app or browser tab is using it (a video call, for example). Close that, then try again." };
     case "InsecureContextError":
-      return { title: "This page can't reach a camera", body: "Open it over https or from localhost. The demo still works." };
+      return { title: "This page can't reach a camera", body: "Browsers only allow cameras on https or localhost pages. Open it over https, or watch the demo.", openElsewhere: true };
     default:
       return { title: "The camera didn't start", body: `${err?.message || "Unknown error"}. Try again, or watch the demo.` };
   }

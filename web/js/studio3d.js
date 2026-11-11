@@ -11,7 +11,7 @@ import { GESTURES, gestureInfo } from "./gestures-meta.js";
 import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { announce, bindHelp, notice, session, typing } from "./ui.js";
+import { announce, bindHelp, notice, session, showProblem, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -837,13 +837,6 @@ const demoBtn = $("demo-btn");
 const startEl = $("start");
 let hero = null;
 
-function showProblem(problem) {
-  const box = $("problem");
-  box.hidden = !problem;
-  if (!problem) return;
-  $("problem-title").textContent = problem.title;
-  $("problem-body").textContent = problem.body;
-}
 
 function setBoot(text, tone) {
   $("boot-state").textContent = text;

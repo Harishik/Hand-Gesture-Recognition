@@ -65,6 +65,27 @@ export const session = {
   },
 };
 
+/** Fills the onboarding problem box; problem = { title, body, openElsewhere } or null to hide it. */
+export function showProblem(problem) {
+  const box = document.getElementById("problem");
+  box.hidden = !problem;
+  if (!problem) return;
+  document.getElementById("problem-title").textContent = problem.title;
+  document.getElementById("problem-body").textContent = problem.body;
+  const actions = document.getElementById("problem-actions");
+  actions.hidden = !problem.openElsewhere;
+  const url = location.href.split("?")[0];
+  document.getElementById("open-elsewhere").onclick = () => window.open(url, "_blank", "noopener");
+  document.getElementById("copy-link").onclick = async (e) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      e.target.textContent = "Link copied";
+    } catch {
+      e.target.textContent = url;
+    }
+  };
+}
+
 /** True when a keyboard shortcut should be ignored because the user is typing or using a control. */
 export const typing = (e) =>
   e.metaKey || e.ctrlKey || e.altKey || Boolean(e.target.closest?.("input, textarea, select, [contenteditable]"));
