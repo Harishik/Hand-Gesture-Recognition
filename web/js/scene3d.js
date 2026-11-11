@@ -102,7 +102,7 @@ export class HandScene {
     // Narrow (portrait) views: centre the object above the hand instead of beside it.
     const narrow = w / h < 1.2;
     this.object.position.set(narrow ? 0 : 0.16, narrow ? 0.09 : 0, 0);
-    this.camera.position.z = (narrow ? 0.85 : 0.62) * (this.object?.visible === false ? 0.72 : 1);
+    this.camera.position.z = (narrow ? 0.85 : 0.62) * (this.object?.visible === false ? 0.86 : 1);
   }
 
   /**

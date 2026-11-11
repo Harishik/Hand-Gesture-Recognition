@@ -1,100 +1,190 @@
 <div align="center">
 
-<img src="web/assets/mark.svg" width="72" alt="logo"/>
+<img src="web/assets/mark.svg" width="68" alt="Gesture Studio logo"/>
 
-# Gesture Studio 3D
+# Gesture Studio
 
-**Real-time hand gesture recognition in the browser — 33 gestures, trained on 1.3M hands, private by design.**
+**Real-time hand gesture recognition that runs entirely in the browser.**<br/>
+33 gestures · both hands tracked in 3D · trained on 1.3M hands · nothing leaves the device.
 
+[![CI](https://github.com/Harishik/Hand-Gesture-Recognition/actions/workflows/ci.yml/badge.svg)](https://github.com/Harishik/Hand-Gesture-Recognition/actions/workflows/ci.yml)
+![HaGRIDv2 test](https://img.shields.io/badge/HaGRIDv2%20test-98.8%25-30d158)
+![Unseen dataset](https://img.shields.io/badge/HANDS%20(unseen)-86.4%25%20when%20detected-7fa8ff)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-MLP-EE4C2C?logo=pytorch&logoColor=white)
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-HandLandmarker-0097A7?logo=google&logoColor=white)
-![Three.js](https://img.shields.io/badge/Three.js-3D%20UI-000000?logo=threedotjs&logoColor=white)
-![Accuracy](https://img.shields.io/badge/HaGRIDv2%20test-98.8%25-58e6c1)
-![Cross--dataset](https://img.shields.io/badge/HANDS%20(unseen%20dataset)-86.4%25%20when%20detected-7aa2ff)
-![CI](https://github.com/Harishik/Hand-Gesture-Recognition/actions/workflows/ci.yml/badge.svg)
+![Three.js](https://img.shields.io/badge/Three.js-0.160-000000?logo=threedotjs&logoColor=white)
+![No build step](https://img.shields.io/badge/web-no%20build%20step-555)
 
-<img src="docs/figures/demo.gif" width="420" alt="Live recognition: hand skeleton with predicted gesture label"/>
+<br/>
 
-<sub>The real Python pipeline running on a recorded clip: MediaPipe landmarks → MLP → smoothed label + confidence.<br/>Regenerate with <code>python scripts/make_figures.py</code>.</sub>
+<img src="docs/media/studio.gif" width="880" alt="Gesture Studio recognising gestures live: a hand skeleton over the camera feed in a 3D scene, the gesture ring, a hand-controlled hologram and the recognition panel"/>
 
-<table><tr>
-<td align="center"><b>33</b><br/><sub>gestures</sub></td>
-<td align="center"><b>98.8%</b><br/><sub>accuracy, unseen people</sub></td>
-<td align="center"><b>~1 ms</b><br/><sub>classifier latency</sub></td>
-<td align="center"><b>0</b><br/><sub>frames leave the device</sub></td>
-</tr></table>
+<sub>Real recording of the app (the bundled demo clip stands in for a webcam). Regenerate with <code>web/tests/record.mjs</code> + <code>scripts/make_gif.py</code>.</sub>
+
+<br/>
+
+<table>
+<tr>
+<td align="center" width="25%"><h3>33</h3><sub>gestures, one and two hands, plus swipes and pinch</sub></td>
+<td align="center" width="25%"><h3>98.8%</h3><sub>accuracy on people never seen in training</sub></td>
+<td align="center" width="25%"><h3>~1&nbsp;ms</h3><sub>classifier time per frame, in plain JavaScript</sub></td>
+<td align="center" width="25%"><h3>0&nbsp;bytes</h3><sub>of video uploaded: there is no server</sub></td>
+</tr>
+</table>
+
+[**Quick start**](#quick-start) · [**Features**](#features) · [**How it works**](#how-it-works) · [**Results**](#results) · [**Engineering**](#engineering-notes) · [**Project layout**](#project-layout)
 
 </div>
 
 ---
 
-A real-time hand gesture system with a full-screen **Three.js 3D interface**. Everything runs in the browser, on-device; no video leaves the tab.
-- **The scene:** your camera feed is a screen inside a 3D scene, and your tracked hands are rendered over it as 3D skeletons with depth and fingertip light trails, coloured by hand (cobalt left, amber right).
-- **Gesture ring:** a 3D carousel of all 33 gestures. The one you're making flies forward.
-- **Hologram:** a 3D object you control with your hands. A fist grabs and rotates it, two open hands scale it, and a pinch recolours it.
-- **Motion:** hand detection runs in a Web Worker, so the scene renders at display rate while the model works; every value on screen eases with frame-rate independent springs, and the camera follows your hand with a slight parallax.
+## Quick start
 
 ```bash
-python scripts/serve_web.py      # then open http://localhost:8765 and press "Turn on camera" (or "Watch the demo" without a webcam)
+git clone https://github.com/Harishik/Hand-Gesture-Recognition.git
+cd Hand-Gesture-Recognition
+python scripts/serve_web.py          # serves web/ on http://localhost:8765 (any static server works)
 ```
 
-`classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings. Its control deck is driven by your hands: a hand inspector (your hand in true 3D with live finger bend, span and pinch measurements), a five-step "how it works" explainer that runs on your own hand, and a player whose music is synthesised live with Web Audio.
+Open **http://localhost:8765** in Chrome or Edge (tested in Chrome; other modern browsers should work), press **Turn on camera** and allow access. No webcam? Press **Watch the demo**. There is no build step and nothing to install for the web app: models are plain JSON, and MediaPipe and Three.js load from a CDN.
 
-## Screenshots
+> [!NOTE]
+> Browsers only grant cameras to `https://` pages and `localhost`. Built-in browsers inside other apps often block cameras entirely; the app detects this and offers to open itself in your normal browser.
 
-| 3D studio (`index.html`) | Classic dashboard (`classic.html`) |
-|---|---|
-| <img src="docs/figures/screen_studio.png" alt="3D Gesture Studio recognising Peace at 98%"/> | <img src="docs/figures/screen_classic.png" alt="Classic dashboard"/> |
-| Hand skeleton over the video screen, the 33-gesture ring, a hologram you steer with your hands, live top-5 and a gesture log. | Action bindings, teach-a-gesture, an air cursor and diagnostics. |
+## Features
 
-<sub>Real captures (GPU, 27 FPS, 35 ms) using the demo clip in place of a webcam: <code>python scripts/serve_web.py</code> then <code>node web/tests/screenshot.mjs</code>.</sub>
+<table>
+<tr>
+<td width="50%" valign="top">
 
-## What it does
+### 🧊 3D Studio · `index.html`
 
-| Feature | How |
-|---|---|
-| **33 static gestures** | MediaPipe HandLandmarker → 67 landmark features → MLP (26 one-hand classes + rejection) |
-| **Two-hand gestures** (heart, prayer, X sign, timeout, frame…) | A second MLP on both hands jointly (221 features: both hands plus their relative pose) |
-| **Swipes** | Palm-centre velocity over 320 ms, normalised by palm size, so it works at any distance |
-| **Air cursor** | Index fingertip with a One Euro filter; pinch to click any control, pinch-drag sliders |
-| **Dwell to confirm** | A gesture must be held for 450 ms to fire, once per hold; avoids accidental triggers |
-| **Teach a gesture** | Few-shot nearest neighbour in the MLP's learned embedding space; saved in the browser |
-| **3D interface** (Three.js, `index.html`) | Video screen in 3D space, depth-aware hand skeletons with light trails, 33-gesture carousel, hand-controlled hologram, confirmation pulses, parallax camera; detection in a Web Worker |
-| **Gesture → action bindings** | Every gesture can drive a demo control deck (slides, media player, reactions, snapshots), remappable in the UI |
-| **Live diagnostics** | Top-5 probabilities per hand, FPS, landmark and classifier latency, event log |
+Your camera feed becomes a screen inside a 3D scene, and your hands are drawn over it as 3D skeletons with real depth: cobalt for the left hand, amber for the right.
 
-The design choices (pinch-to-click, immediate visual feedback, dwell confirmation, jitter filtering, on-device processing) follow current XR hand-tracking guidance. See [docs/RESEARCH.md](docs/RESEARCH.md) for the survey of papers, products and open-source projects behind them.
+- **Gesture ring:** all 33 gestures on a carousel; the one you hold turns to face you
+- **Hologram:** a fist grabs and turns it, two open hands resize it, a pinch changes its finish
+- **Recognition panel:** live confidence, hold progress, close alternatives and a log of confirmed gestures
+- **Parallax camera** that follows your index finger
+
+</td>
+<td width="50%" valign="top">
+
+### 🎛️ Classic · `classic.html`
+
+A workbench for using gestures as an input device.
+
+- **Action bindings:** map any gesture to any action, saved in the browser
+- **Teach a gesture:** record your own pose in 3 seconds, recognised in the model's learned embedding
+- **Air cursor:** your index fingertip points, a pinch clicks any control, pinch-and-drag moves sliders
+- **Control deck:** a hand inspector, a live explainer and a synthesised music player, all hand-driven
+
+</td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/media/classic-deck.gif" width="880" alt="Classic control deck: the hand inspector with live finger-bend measurements, the live explainer slides and the synthesised player"/></p>
+
+<details>
+<summary><b>What's on the Classic control deck</b></summary>
+
+| Card | What it shows | Driven by |
+|---|---|---|
+| **Hand inspector** | Your hand in true 3D (MediaPipe world landmarks, in metres), orbitable, with live finger bend in degrees, hand span (cm), pinch gap (mm) and palm length. Measured in 3D, so the numbers hold at any distance from the camera. | Every frame |
+| **How it works** | Five slides, each running one stage of the pipeline on your own hand: the 21 numbered landmarks, the classifier's top three, the hold-to-confirm ring, a swipe speed meter against the engine's real threshold, and live privacy counters. | Swipe left / right |
+| **Player** | A generative ambient track synthesised with Web Audio (no audio files). The equaliser shows the real spectrum. | Open palm, swipe up / down |
+| **Reactions, Snapshots** | Counters and a snapshot strip of the stage. | Thumbs, rock / heart, OK / frame |
+
+</details>
+
+### Gestures and default actions
+
+| Gesture | Default action | | Gesture | Default action |
+|---|---|---|---|---|
+| ✋ Open palm | Play / pause | | 👍 / 👎 Thumbs up / down | Like / dislike |
+| ⬅️ ➡️ Swipe left / right | Previous / next slide | | 🤘 Rock, 🫶 hand heart | Celebrate |
+| ⬆️ ⬇️ Swipe up / down | Volume up / down | | 👌 OK, 🖼️ frame with two hands | Snapshot |
+| 🤏 Pinch | Air click (Classic), change finish (Studio) | | ❌ X sign | Reset the deck |
+| ✊ Fist and move | Turn the hologram (Studio) | | 🤫 Mute | Mute |
+
+All 33 gestures are listed with their poses in the **Gestures** tab, and every binding is remappable in **Actions**.
+
+### Polished where it matters
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/landing.gif" alt="Start screen: a hand skeleton morphing between real gesture poses, naming each one"/></td>
+<td width="50%"><img src="docs/media/mobile.png" alt="The start screen, Studio and Classic on a phone"/></td>
+</tr>
+<tr>
+<td valign="top"><sub><b>Start screen.</b> A hand morphs between real HaGRIDv2 poses and names each one, so a visitor learns the vocabulary before turning the camera on. It is laid out around the text by measurement, so it never overlaps it.</sub></td>
+<td valign="top"><sub><b>Down to 375&nbsp;px.</b> Both views adapt to phones; the stage stays on top and the panels follow.</sub></td>
+</tr>
+</table>
+
+- **Honest onboarding:** loading shows its real stages; camera errors name the cause (permission blocked, no camera, camera busy, embedded browser) and the fix.
+- **Robust sessions:** a Stop control for the camera or the demo; switching between Studio and Classic keeps the session; a lost camera offers Reconnect; detection pauses in background tabs.
+- **Accessible:** full keyboard control (press <kbd>?</kbd> for shortcuts), visible focus, screen-reader announcements for confirmed gestures, and `prefers-reduced-motion` / `prefers-reduced-transparency` support.
+- **Fallbacks:** CPU tracking when no GPU is available; Classic takes over without WebGL.
+
+## How it works
+
+```mermaid
+flowchart LR
+    CAM([📷 Camera]) -->|frame as ImageBitmap| W
+    subgraph W [Web Worker]
+      LM[MediaPipe HandLandmarker<br/>GPU, CPU fallback]
+    end
+    W -->|21 landmarks per hand| F1[67 hand features]
+    W --> F2[221 pair features]
+    F1 --> M1[One-hand MLP<br/>26 gestures + reject]
+    F2 --> M2[Two-hand MLP<br/>7 gestures]
+    M1 --> S[Temperature, rejection,<br/>smoothing, hysteresis]
+    W --> SW[Palm trajectory → swipes]
+    W --> PI[Thumb–index → pinch,<br/>One Euro cursor]
+    S & M2 --> DW{Hold to confirm}
+    DW & SW & PI --> UI([⚡ Actions · 3D studio · panels])
+    classDef io fill:#0d0e11,stroke:#30d158,color:#f5f5f7
+    classDef model fill:#151619,stroke:#7fa8ff,color:#f5f5f7
+    class CAM,UI io
+    class M1,M2 model
+```
+
+1. **Detect.** MediaPipe HandLandmarker finds up to two hands and places 21 landmarks on each. It runs in a **Web Worker**, so the page keeps rendering at display rate while the model works.
+2. **Describe.** Each hand becomes 67 scale- and rotation-invariant features (angles and normalised distances); a pair of hands becomes 221 features, including their relative pose.
+3. **Classify.** Two small MLPs, trained in PyTorch and exported to dependency-free JavaScript with BatchNorm folded in, score the gestures in about 1 ms. A parity test proves the JavaScript matches Python.
+4. **Stabilise.** Temperature scaling, an open-set rejection class, smoothing and label hysteresis stop flicker; a gesture fires only after it is held (450 ms), once per hold.
+5. **Act.** Confirmed gestures trigger the bound action; swipes come from palm speed in palm widths, and the air cursor from a One Euro filter on the index fingertip.
 
 ## Results
 
-All test numbers are on **HaGRIDv2 test subjects never seen in training**, with subject-disjoint splits (see [docs/DATA.md](docs/DATA.md)).
+All test numbers are on **HaGRIDv2 subjects never seen in training**, with subject-disjoint splits ([data notes](docs/DATA.md)).
 
 | Model | Test set | Accuracy | Macro precision |
 |---|---|---|---|
 | One-hand, 26 gestures | 26 gestures + no gesture (153,755 hands) | **98.8%** | **98.9%** |
-| | Open-set: also rejects halves of two-hand gestures (201,133 hands) | 94.7% | 95.7% |
+| | Open set: also rejects halves of two-hand gestures (201,133 hands) | 94.7% | 95.7% |
 | Two-hand, 7 gestures | Pairs of hands (44,195 pairs) | **99.3%** | **98.0%** |
 | One-hand, original 6 gestures | 6 + no gesture (60,488 hands) | 99.4% | 99.2% |
 
 - **Fairness:** gesture recall stays within 98.1–99.0% across the subjects' auto-annotated gender and race groups.
 - **Calibration:** expected calibration error is 0.014.
-- **Speed:** the classifiers run in about 1 ms. End to end, the Python pipeline reaches about 21 FPS on a laptop CPU. In the browser, the hand landmarker uses the GPU (WebGL) when available.
-
+- **Speed:** about 1 ms for the classifiers; the Python pipeline reaches about 21 FPS end to end on a laptop CPU.
 
 <p align="center"><img src="docs/figures/headline.png" width="88%" alt="Headline metrics and fairness slices"/></p>
 
-<details><summary><b>📊 Confusion matrix, per-gesture F1 and training curve</b> (click to expand)</summary>
+<details>
+<summary><b>Confusion matrix, per-gesture F1 and training curve</b></summary>
 
-<p align="center"><img src="docs/figures/confusion.png" width="70%"/></p>
-<p align="center"><img src="docs/figures/per_class_f1.png" width="70%"/></p>
-<p align="center"><img src="docs/figures/training.png" width="60%"/></p>
+<p align="center"><img src="docs/figures/confusion.png" width="70%" alt="Confusion matrix"/></p>
+<p align="center"><img src="docs/figures/per_class_f1.png" width="70%" alt="Per-gesture F1"/></p>
+<p align="center"><img src="docs/figures/training.png" width="60%" alt="Training curve"/></p>
 
 </details>
 
-### Cross-dataset test: a dataset the model has never seen
+### On a dataset it has never seen
 
-To check that the model isn't just learning HaGRID, both models were run **unchanged** on [HANDS](https://data.mendeley.com/datasets/ndrczc35bt) (Nuzzi et al. 2021, CC BY 4.0): a different lab, a Kinect v2 camera, five different people. All 5 subjects, every 3rd frame, 3,504 one-hand and 498 two-hand samples (`scripts/download_hands.py`, `scripts/eval_hands.py`, `scripts/summarise_hands.py`, [report](reports/cross_dataset_hands.json)).
+Both models were run **unchanged** on [HANDS](https://data.mendeley.com/datasets/ndrczc35bt) (Nuzzi et al. 2021, CC BY 4.0): a different lab, a Kinect v2 camera, five different people. All 5 subjects, every 3rd frame: 3,504 one-hand and 498 two-hand samples ([report](reports/cross_dataset_hands.json)).
 
 <p align="center"><img src="docs/figures/cross_dataset.png" width="80%" alt="Per-gesture accuracy on HANDS"/></p>
 
@@ -105,80 +195,60 @@ To check that the model isn't just learning HaGRID, both models were run **uncha
 | Correct end to end | 68.7% | 24.9% |
 | Precision of named predictions | 87.2% | 98.4% |
 
-| Subject | 1 | 2 | 3 | 4 | 5 |
-|---|---|---|---|---|---|
-| Hand found | 90.0% | 78.6% | **32.0%** | 98.1% | 99.0% |
-| Correct when found | 81.0% | 92.2% | 95.1% | 83.0% | 87.2% |
+The classifier transfers well (palm, fist and three at 98–99%). The two real weaknesses are elsewhere: **gesture definitions differ between datasets** (HANDS' "Span" sits between our call, pinky and rock), and **detection, not classification, limits the end-to-end number** (MediaPipe misses most hands for one subject and both hands in most two-hand frames).
 
-**What this shows.** The classifier transfers well: palm, fist and three are 98–99%, four 94%, peace 89%, one 86%. The two real weaknesses are elsewhere:
-- **Gesture definitions differ.** HANDS' "Span" (38%) is performed between our *call*, *pinky* and *rock* poses.
-- **Detection, not classification, limits the end-to-end number.** MediaPipe misses most hands for Subject 3 and both hands in most two-hand frames. When it finds them, two-hand gestures are 98.4% correct.
+The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Notable findings: open-set training matters (without "other gesture" negatives, live precision drops to 32%); HaGRID's "inverted" classes are back-of-hand views; its official split leaks two subjects between train and test; and it mixes image aspect ratios its annotations don't record.
 
-The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Key findings:
-- **Open-set training matters:** training without "other gesture" negatives drops live precision to 32%.
-- **HaGRID's "inverted" classes are back-of-hand views, not upside-down hands.**
-- **HaGRID's official split leaks two subjects between train and test.**
-- **HaGRID mixes image aspect ratios** that its annotations don't record.
+<details>
+<summary><b>The Python pipeline</b> (OpenCV, used for evaluation and recording)</summary>
+<p align="center"><img src="docs/figures/demo.gif" width="420" alt="The Python pipeline on a recorded clip: landmarks, label and confidence"/></p>
+</details>
 
-## Architecture
+## Engineering notes
 
-```mermaid
-flowchart LR
-    CAM([📷 Camera]) --> LM[MediaPipe<br/>HandLandmarker]
-    LM -->|21 landmarks / hand| F1[67 features]
-    LM --> F2[221 pair features]
-    LM --> PALM[Palm trajectory]
-    LM --> PINCH[Thumb–index distance]
-    F1 --> M1[One-hand MLP<br/>26 + reject]
-    F2 --> M2[Two-hand MLP<br/>7 gestures]
-    M1 --> CAL[Temperature + rejection<br/>+ EMA smoothing]
-    PALM --> SW[Swipes]
-    PINCH --> CUR[One Euro cursor<br/>click / drag]
-    CAL & M2 & SW & CUR --> DW{Dwell 450 ms}
-    DW --> ACT([⚡ Actions & 3D UI])
-    LM -->|world landmarks| UI3D([🧊 Three.js studio])
-    classDef io fill:#0d1117,stroke:#58e6c1,color:#e6edf3
-    classDef model fill:#1f2a44,stroke:#7aa2ff,color:#e6edf3
-    class CAM,ACT,UI3D io
-    class M1,M2 model
-```
+Smoothness was measured, not eyeballed: frame intervals from `requestAnimationFrame` in headless Chrome on a laptop with integrated graphics, demo clip running.
 
-The models are trained in PyTorch, then exported with BatchNorm folded into the linear layers. In the browser they run in a small, dependency-free JavaScript module. A parity test checks that the JavaScript features and probabilities match Python.
-
-## Limitations and next steps
-
-| Limitation | Evidence | Next step |
+| Change | Before | After |
 |---|---|---|
-| Gesture definitions differ between datasets | HANDS "Span" (call) and "One" transfer poorly although the hand is found | Few-shot personalisation in the model's embedding ("Teach"), already in the classic UI; report its gain |
-| Detection, not classification, is the bottleneck | MediaPipe finds 25% of HANDS two-hand frames (98.4% correct when found) and 32% of Subject 3's hands | Lower detection thresholds for pairs, or a whole-body/hand detector such as WiLoR |
-| Static gestures only | Only swipes are dynamic | Temporal model (GRU/TCN) over landmark sequences |
-| Small personal test set | 33 own photos: 75.8% strict / 87.9% lenient for the 33-gesture model (93.9% for the 6-gesture model) | Record a larger, consented multi-person set with `scripts/record_clips.py` |
-| Demographic slices are approximate | Gender and race come from HaGRID's automatic face-model annotations | Treat the fairness numbers as a sanity check, not an audit |
-| MLP on hand-crafted features | Strong in-domain, but ignores the hand's graph structure | Graph-network and transformer ablations over the 21-joint skeleton |
+| Hand detection moved from the main thread into a Web Worker | ~12 fps render, p50 67–83 ms per frame | p50 16.7 ms (60 fps) |
+| Bloom post-processing removed (glow painted instead) | p95 133 ms | p95 17 ms |
+| Live backdrop blur removed from panels over moving canvases | p95 > 30 ms | within frame budget |
+| Model warmed up during loading | first result ~15 s after camera start | first result at camera start |
 
-## Repository layout
+- **Motion model:** the tracker delivers results at camera rate; everything on screen eases towards them every display frame with frame-rate-independent springs ([`web/js/motion.js`](web/js/motion.js)), and the smoothing adapts to the measured detection interval, so motion stays continuous on slow hardware.
+- **Design system:** one typeface (Inter), materials instead of lines, colour reserved for meaning (cobalt left hand, amber right, green live, red recording), tokens in [`web/css/tokens.css`](web/css/tokens.css).
+- **Tests:** Python unit tests, a JavaScript/Python parity test for features and model outputs, and a syntax check of every browser module run in CI on every push. `web/tests/screenshot.mjs` and `web/tests/record.mjs` regenerate the screenshots and GIFs from the running app.
 
+## Project layout
+
+```text
+├── web/                     the browser app: static files, no build step
+│   ├── index.html           3D Studio
+│   ├── classic.html         Classic workbench
+│   ├── css/                 tokens.css (design system), studio3d.css, app.css
+│   ├── js/
+│   │   ├── tracker.js       camera, demo clips, worker pipeline, error handling
+│   │   ├── landmark-worker.js   MediaPipe in a Web Worker
+│   │   ├── engine.js        hold-to-confirm, swipes, pinch, air cursor, hand tracking
+│   │   ├── features.js · mlp.js · custom.js · filters.js   features, classifiers, teach, One Euro
+│   │   ├── studio3d.js      the 3D Studio          app.js   Classic
+│   │   ├── slides.js · inspector.js · synth.js     Classic control deck
+│   │   └── motion.js · hero.js · ui.js · glyph.js  springs, start screen, shared UI, pose glyphs
+│   ├── models/              hand.json, pair.json (exported MLPs), poses.json, parity fixture
+│   └── tests/               parity.mjs, screenshot.mjs, record.mjs
+├── src/hgr/                 Python: data, features, training, evaluation, real-time pipeline
+│   └── legacy/              the original 2024 SSIM template-matching version
+├── scripts/                 download, cache, export, serve, figures, GIFs, cross-dataset evaluation
+├── docs/                    DATA.md, MODEL.md, RESEARCH.md, UPGRADE_PLAN.md, figures/, media/, paper/
+├── reports/                 evaluation outputs (JSON)
+├── tests/                   Python tests
+└── .github/workflows/ci.yml lint, format, tests, JS parity, module syntax
 ```
-├── web/                   # the browser app (no build step)
-│   ├── index.html         # 3D studio (Three.js) · classic.html: 2D dashboard
-│   ├── css/
-│   ├── js/                # studio3d (3D app), app (classic), tracker + landmark-worker (MediaPipe off the main thread),
-│   │                      # engine (dwell/swipe/pinch), features, mlp, custom, filters, motion (springs), hero, ui
-│   ├── models/            # exported classifiers (hand.json, pair.json) + parity fixture
-│   └── tests/parity.mjs   # JS vs Python check
-├── src/hgr/               # Python: data, features, training, evaluation, real-time pipeline
-│   ├── hagrid.py, splits.py, features.py, augment.py, pairs.py, labels.py
-│   ├── model.py, train.py, train_pairs.py, evaluate.py, metrics.py
-│   ├── landmarker.py, pipeline.py
-│   └── legacy/            # the original 2024 SSIM template-matching version
-├── scripts/               # download, cache, export, serve, live OpenCV demo, clip recorder/evaluator
-├── docs/                  # DATA.md, MODEL.md, RESEARCH.md, figures
-├── reports/               # evaluation outputs (JSON)
-├── data/personal/         # 34 hand-captured photos used as an extra out-of-distribution check
-└── tests/
-```
 
-## Reproduce
+## Development
+
+<details>
+<summary><b>Retrain the models from scratch</b></summary>
 
 ```bash
 python -m venv .venv && .venv\Scripts\activate        # Windows; source .venv/bin/activate elsewhere
@@ -189,15 +259,43 @@ python -m hgr.train --classes hagrid --out models/gesture_mlp_hagrid.pt   # ~25 
 python -m hgr.train_pairs                              # two-hand model, ~6 min
 python -m hgr.evaluate --model models/gesture_mlp_hagrid.pt --out reports/metrics_hagrid.json
 python scripts/export_web.py                           # -> web/models
-pytest                                                 # includes the JS/Python parity test (needs Node)
 ```
+
+</details>
+
+<details>
+<summary><b>Checks, screenshots and GIFs</b></summary>
+
+```bash
+ruff check . && ruff format --check . && pytest -q    # Python
+node web/tests/parity.mjs                              # JavaScript matches Python
+python scripts/serve_web.py &                          # then, with Chrome installed:
+node web/tests/screenshot.mjs                          # docs/figures/screen_*.png
+node web/tests/record.mjs out/ "/?video=test-media/demo.webm&autostart" 10
+python scripts/make_gif.py out/ docs/media/studio.gif
+```
+
+</details>
+
+## Limitations and roadmap
+
+| Limitation | Evidence | Next step |
+|---|---|---|
+| Gesture definitions differ between datasets | HANDS "Span" and "One" transfer poorly although the hand is found | Few-shot personalisation ("Teach", already in Classic); measure its gain |
+| Detection, not classification, is the bottleneck | MediaPipe finds 25% of HANDS two-hand frames (98.4% correct when found) | Lower detection thresholds for pairs, or a stronger hand detector |
+| Static gestures only | Only swipes are dynamic | A temporal model (GRU / TCN) over landmark sequences |
+| Small personal test set | 33 own photos: 75.8% strict, 87.9% lenient | A larger, consented multi-person set (`scripts/record_clips.py`) |
+| Demographic slices are approximate | From HaGRID's automatic face-model annotations | A sanity check, not an audit |
 
 ## From the 2024 version
 
-The original class project compared 50×50 grayscale crops against 34 photos of one person using SSIM (structural similarity). It recognised 6 gestures, had no way to reject other hand shapes, and its on-screen "accuracy" was really a similarity score. That version is kept in `src/hgr/legacy/` as a baseline.
+The original class project compared 50×50 grayscale crops against 34 photos of one person using SSIM. It recognised 6 gestures, could not reject other hand shapes, and its on-screen "accuracy" was a similarity score. It is kept in `src/hgr/legacy/` as a baseline; the plan that took it to this version is in [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md).
 
-## Acknowledgements
+## Licensing and credits
 
-- **Data:** HaGRIDv2, by Nuzhdin et al. ([arXiv:2412.01508](https://arxiv.org/abs/2412.01508)), licensed under a variant of CC BY-SA 4.0 ([terms](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf)).
+> [!IMPORTANT]
+> This repository does not yet include a licence file, so all rights are reserved by default. The gesture models are trained on **HaGRIDv2**, which is released under a variant of **CC BY-SA 4.0** ([terms](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf)); check those terms before using the trained models commercially.
+
+- **Data:** HaGRIDv2 by Nuzhdin et al. ([arXiv:2412.01508](https://arxiv.org/abs/2412.01508)); HANDS by Nuzzi et al. (CC BY 4.0) for the cross-dataset test.
 - **Hand tracking:** [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) by Google.
-- **3D:** [Three.js](https://threejs.org).
+- **3D:** [Three.js](https://threejs.org). **Type:** [Inter](https://rsms.me/inter/).
