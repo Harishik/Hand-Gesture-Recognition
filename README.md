@@ -1,6 +1,35 @@
-# Gesture Studio 3D: real-time hand gesture recognition
+<div align="center">
 
-A real-time hand gesture system with a full-screen **Three.js 3D interface**, trained on 1.3M hands from HaGRIDv2. Everything runs in the browser, on-device; no video leaves the tab.
+<img src="web/assets/mark.svg" width="72" alt="logo"/>
+
+# Gesture Studio 3D
+
+**Real-time hand gesture recognition in the browser — 33 gestures, trained on 1.3M hands, private by design.**
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-MLP-EE4C2C?logo=pytorch&logoColor=white)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-HandLandmarker-0097A7?logo=google&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-3D%20UI-000000?logo=threedotjs&logoColor=white)
+![Accuracy](https://img.shields.io/badge/HaGRIDv2%20test-98.8%25-58e6c1)
+![Cross--dataset](https://img.shields.io/badge/HANDS%20(unseen%20dataset)-81%25%20when%20detected-7aa2ff)
+![CI](https://github.com/Harishik/Hand-Gesture-Recognition/actions/workflows/ci.yml/badge.svg)
+
+<img src="docs/figures/demo.gif" width="420" alt="Live recognition: hand skeleton with predicted gesture label"/>
+
+<sub>The real Python pipeline running on a recorded clip: MediaPipe landmarks → MLP → smoothed label + confidence.<br/>Regenerate with <code>python scripts/make_figures.py</code>.</sub>
+
+<table><tr>
+<td align="center"><b>33</b><br/><sub>gestures</sub></td>
+<td align="center"><b>98.8%</b><br/><sub>accuracy, unseen people</sub></td>
+<td align="center"><b>~1 ms</b><br/><sub>classifier latency</sub></td>
+<td align="center"><b>0</b><br/><sub>frames leave the device</sub></td>
+</tr></table>
+
+</div>
+
+---
+
+A real-time hand gesture system with a full-screen **Three.js 3D interface**. Everything runs in the browser, on-device; no video leaves the tab.
 - **The scene:** your camera feed is a screen inside a 3D scene, and your tracked hands are rendered over it as glowing 3D skeletons with depth, bloom and fingertip light trails.
 - **Gesture ring:** a 3D carousel of all 33 gestures. The one you're making flies forward.
 - **Hologram:** a 3D object you control with your hands. A fist grabs and rotates it, two open hands scale it, and a pinch recolours it.
@@ -43,6 +72,34 @@ All test numbers are on **HaGRIDv2 test subjects never seen in training**, with 
 - **Calibration:** expected calibration error is 0.014.
 - **Speed:** the classifiers run in about 1 ms. End to end, the Python pipeline reaches about 21 FPS on a laptop CPU. In the browser, the hand landmarker uses the GPU (WebGL) when available.
 
+
+<p align="center"><img src="docs/figures/headline.png" width="88%" alt="Headline metrics and fairness slices"/></p>
+
+<details><summary><b>📊 Confusion matrix, per-gesture F1 and training curve</b> (click to expand)</summary>
+
+<p align="center"><img src="docs/figures/confusion.png" width="70%"/></p>
+<p align="center"><img src="docs/figures/per_class_f1.png" width="70%"/></p>
+<p align="center"><img src="docs/figures/training.png" width="60%"/></p>
+
+</details>
+
+### Cross-dataset test: a dataset the model has never seen
+
+To check that the model isn't just learning HaGRID, it was run unchanged on [HANDS](https://data.mendeley.com/datasets/ndrczc35bt) (Nuzzi et al. 2021, CC BY 4.0): a different lab, a Kinect v2 camera, different people. Subject 1, every 3rd frame (`scripts/eval_hands.py`, [report](reports/cross_dataset_hands_subject1.json)):
+
+| HANDS gesture → ours | Accuracy |
+|---|---|
+| Five → palm | 99.0% |
+| Punch → fist | 98.7% |
+| Three → three | 93.9% |
+| Four → four | 92.9% |
+| Two → peace | 75.3% |
+| One → one | 68.3% |
+| Span → call | 30.5% |
+| **All 700 one-hand samples** | **81.0%** when a hand is detected (90% detected) · **72.9%** end to end |
+
+The weak classes are the honest finding: HANDS' "Span" and "One" are performed with poses that sit between HaGRID classes, and MediaPipe finds both hands in only 6% of HANDS' two-hand frames (when it does, both two-hand gestures are 100% correct). Full analysis in [the paper draft](docs/paper/draft.md).
+
 The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Key findings:
 - **Open-set training matters:** training without "other gesture" negatives drops live precision to 32%.
 - **HaGRID's "inverted" classes are back-of-hand views, not upside-down hands.**
@@ -51,14 +108,25 @@ The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Key fin
 
 ## Architecture
 
-```
-camera ─► MediaPipe HandLandmarker (WASM/WebGL) ─► 21 landmarks per hand (2D + 3D world)
-            │
-            ├─► features (67) ─► one-hand MLP ─► temperature + rejection bias ─► EMA smoothing ─┐
-            ├─► pair features (221) ─► two-hand MLP ───────────────────────────────────────────┤
-            ├─► palm trajectory ─► swipes                                                       ├─► dwell ─► events ─► actions
-            ├─► thumb–index distance ─► pinch ─► One Euro cursor ─► click / drag                ┘
-            └─► world landmarks ─► Three.js 3D lab
+```mermaid
+flowchart LR
+    CAM([📷 Camera]) --> LM[MediaPipe<br/>HandLandmarker]
+    LM -->|21 landmarks / hand| F1[67 features]
+    LM --> F2[221 pair features]
+    LM --> PALM[Palm trajectory]
+    LM --> PINCH[Thumb–index distance]
+    F1 --> M1[One-hand MLP<br/>26 + reject]
+    F2 --> M2[Two-hand MLP<br/>7 gestures]
+    M1 --> CAL[Temperature + rejection<br/>+ EMA smoothing]
+    PALM --> SW[Swipes]
+    PINCH --> CUR[One Euro cursor<br/>click / drag]
+    CAL & M2 & SW & CUR --> DW{Dwell 450 ms}
+    DW --> ACT([⚡ Actions & 3D UI])
+    LM -->|world landmarks| UI3D([🧊 Three.js studio])
+    classDef io fill:#0d1117,stroke:#58e6c1,color:#e6edf3
+    classDef model fill:#1f2a44,stroke:#7aa2ff,color:#e6edf3
+    class CAM,ACT,UI3D io
+    class M1,M2 model
 ```
 
 The models are trained in PyTorch, then exported with BatchNorm folded into the linear layers. In the browser they run in a small, dependency-free JavaScript module. A parity test checks that the JavaScript features and probabilities match Python.
