@@ -38,6 +38,3 @@ checkpoints/
 # OS
 .DS_Store
 Thumbs.db
-
-# Local test media for the web app
-web/test-media/
