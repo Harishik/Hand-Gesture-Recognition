@@ -67,12 +67,13 @@ const store = {
 };
 let bindings = { ...DEFAULT_BINDINGS, ...store.get(BINDINGS_KEY, {}) };
 
+// Each slide: kicker, title, body, stat, glyphs drawn from the real pose data, accent colour.
 const SLIDES = [
-  ["Swipe to navigate", "Open your hand and swipe left or right.", "#2b2f36", "#3a3f47"],
-  ["33 gestures", "26 one-hand and 7 two-hand gestures from HaGRIDv2.", "#3a3f47", "#2b2f36"],
-  ["Air cursor", "Point with your index finger, pinch to click.", "#2b2f36", "#3a3f47"],
-  ["Teach it", "Record a custom gesture in 3 seconds.", "#3a3f47", "#2b2f36"],
-  ["On-device", "Video never leaves your browser.", "#2b2f36", "#3a3f47"],
+  ["Navigate", "Swipe to move", "Open your hand and flick left or right. Speed is normalised by palm size, so it works at any distance.", "320 ms", ["palm", "stop", "palm"], "#7aa2ff"],
+  ["Vocabulary", "33 gestures", "26 one-hand and 7 two-hand gestures, trained on 1.3M hands from HaGRIDv2.", "98.8%", ["peace", "ok", "rock", "like", "call", "fist"], "#58e6c1"],
+  ["Pointer", "Air cursor", "Your index fingertip, smoothed by a One Euro filter. Pinch to click, pinch-drag sliders.", "~1 ms", ["point", "grip", "one"], "#ffb25c"],
+  ["Personalise", "Teach it yours", "Record any pose for three seconds. It is matched in the model's learned embedding.", "3 s", ["three_gun", "little_finger", "thumb_index"], "#c792ea"],
+  ["Privacy", "Never uploaded", "Tracking and classification run entirely in this tab, on your GPU. No frames leave the device.", "0 bytes", ["holy", "hand_heart"], "#58e6c1"],
 ];
 const deck = { slide: 0, playing: false, volume: 0.6, muted: false, likes: 0, dislikes: 0 };
 
@@ -80,7 +81,10 @@ function renderDeck() {
   const track = $("slide-track");
   if (!track.children.length) {
     track.innerHTML = SLIDES.map(
-      ([t, p, a, b]) => `<div class="slide" style="background:linear-gradient(135deg,${a},${b})"><h4>${t}</h4><p>${p}</p></div>`,
+      ([k, t, p, stat, glyphs, c]) => `<div class="slide" style="--c:${c}">
+        <div class="slide-art">${glyphs.map((g, j) => `<img src="${glyphURL(g, 64, c)}" alt="" style="--j:${j}">`).join("")}</div>
+        <div class="slide-copy"><span class="slide-kicker">${k}</span><h4>${t}</h4><p>${p}</p></div>
+        <b class="slide-stat">${stat}</b></div>`,
     ).join("");
     $("slide-dots").innerHTML = SLIDES.map(() => "<i></i>").join("");
     $("eq").innerHTML = "<span></span>".repeat(24);

@@ -41,6 +41,15 @@ python scripts/serve_web.py      # then open http://localhost:8765 and press "St
 
 `classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings.
 
+## Screenshots
+
+| 3D studio (`index.html`) | Classic dashboard (`classic.html`) |
+|---|---|
+| <img src="docs/figures/screen_studio.png" alt="3D Gesture Studio recognising Peace at 98%"/> | <img src="docs/figures/screen_classic.png" alt="Classic dashboard"/> |
+| Hand skeleton over the video screen, the 33-gesture ring, a hologram you steer with your hands, live top-5 and a gesture log. | Action bindings, teach-a-gesture, an air cursor and diagnostics. |
+
+<sub>Real captures (GPU, 27 FPS, 35 ms) using the demo clip in place of a webcam: <code>python scripts/serve_web.py</code> then <code>node web/tests/screenshot.mjs</code>.</sub>
+
 ## What it does
 
 | Feature | How |
@@ -130,6 +139,17 @@ flowchart LR
 ```
 
 The models are trained in PyTorch, then exported with BatchNorm folded into the linear layers. In the browser they run in a small, dependency-free JavaScript module. A parity test checks that the JavaScript features and probabilities match Python.
+
+## Limitations and next steps
+
+| Limitation | Evidence | Next step |
+|---|---|---|
+| Gesture definitions differ between datasets | HANDS "Span" (call) and "One" transfer poorly although the hand is found | Few-shot personalisation in the model's embedding ("Teach"), already in the classic UI; report its gain |
+| Two-hand detection, not classification, is the bottleneck | Both hands found in few HANDS frames; those found are classified correctly | Lower detection thresholds for pairs, or a whole-body/hand detector such as WiLoR |
+| Static gestures only | Only swipes are dynamic | Temporal model (GRU/TCN) over landmark sequences |
+| Small personal test set | 33 own photos: 75.8% strict / 87.9% lenient for the 33-gesture model (93.9% for the 6-gesture model) | Record a larger, consented multi-person set with `scripts/record_clips.py` |
+| Demographic slices are approximate | Gender and race come from HaGRID's automatic face-model annotations | Treat the fairness numbers as a sanity check, not an audit |
+| MLP on hand-crafted features | Strong in-domain, but ignores the hand's graph structure | Graph-network and transformer ablations over the 21-joint skeleton |
 
 ## Repository layout
 

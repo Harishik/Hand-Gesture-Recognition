@@ -281,8 +281,24 @@ function buildRing() {
     return mesh;
   });
 }
+// Ring physics: a critically-damped spring with a speed cap, so it glides and settles instead of snapping.
 let ringTarget = 0;
+let ringVel = 0;
 let ringIdle = true;
+let stableId = null;
+let stableSince = 0;
+const RING_K = 9; // spring stiffness (1/s^2)
+const RING_C = 2 * Math.sqrt(RING_K) * 0.95; // just under critical damping: one soft overshoot
+const RING_VMAX = 1.6; // rad/s
+function stepRing(dt) {
+  const acc = RING_K * (ringTarget - ring.rotation.y) - RING_C * ringVel;
+  ringVel = Math.max(-RING_VMAX, Math.min(RING_VMAX, ringVel + acc * dt));
+  ring.rotation.y += ringVel * dt;
+}
+function snapRing() {
+  const step = (Math.PI * 2) / Math.max(1, tiles.length);
+  ringTarget = Math.round(ringTarget / step) * step;
+}
 function focusTile(id) {
   const tile = tiles.find((t) => t.userData.id === id);
   if (!tile) return;
@@ -395,17 +411,21 @@ function setNow(id, color) {
   setNow.color = color;
   nowGlyph.clearRect(0, 0, 176, 176);
   if (id && id !== "no_gesture") drawGlyph(nowGlyph, id, 16, 16, 144, { color, width: 6 });
+  else drawGlyph(nowGlyph, "palm", 28, 28, 120, { color: "rgba(142,147,156,0.35)", width: 4, joints: false }); // idle silhouette, never an empty box
 }
 
 function updatePanel(state, t, landmarkMs) {
   hud.land = hud.land ? 0.9 * hud.land + 0.1 * (landmarkMs + state.classifyMs) : landmarkMs + state.classifyMs;
-  if (t - hud.last < 100) return;
-  hud.last = t;
-  $("fps").textContent = hud.fps.toFixed(0);
-  $("latency").textContent = hud.land.toFixed(0);
-
   const primary = state.hands[0];
   const id = state.pair?.id ?? primary?.label ?? null;
+  // Throttle text updates to 10 Hz, but never let the panel disagree with the 3D label: a change of gesture or hand
+  // repaints immediately.
+  const key = `${id}|${primary?.handedness}`;
+  if (t - hud.last < 100 && key === hud.key) return;
+  hud.last = t;
+  hud.key = key;
+  $("fps").textContent = hud.fps.toFixed(0);
+  $("latency").textContent = hud.land.toFixed(0);
   const color = state.pair ? "#ece8e1" : channelOf(primary?.handedness);
   document.querySelector(".now").style.setProperty("--hand", color);
   setNow(id, color);
@@ -482,8 +502,10 @@ function animate() {
     });
 
     const active = state.pair?.id ?? state.hands[0]?.label;
-    if (active && active !== "no_gesture") focusTile(active);
-    else ringIdle = true;
+    // Only turn the ring once a gesture has been steady for 300 ms; single-frame flickers are ignored.
+    if (active !== stableId) { stableId = active; stableSince = t; }
+    if (active && active !== "no_gesture") { if (t - stableSince > 300) focusTile(active); }
+    else if (t - stableSince > 1200) ringIdle = true;
     for (const tile of tiles) {
       const on = tile.userData.id === active;
       if (on !== tile.userData.active) {
@@ -498,15 +520,21 @@ function animate() {
       const idx = Math.max(0, state.hands.findIndex((h) => h.handedness === ev.source));
       const color = ev.source === "two-hand" ? "#ece8e1" : channelOf(state.hands[idx]?.handedness);
       if (state.hands[idx]) pulse(hands3d[idx].pts[9].clone(), color);
-      if (ev.id === "swipe_left") ringTarget -= 0.7;
-      if (ev.id === "swipe_right") ringTarget += 0.7;
+      if (ev.id === "swipe_left" || ev.id === "swipe_right") {
+        const dir = ev.id === "swipe_left" ? -1 : 1;
+        ringVel += dir * 1.2; // momentum from the flick
+        ringTarget += dir * ((Math.PI * 2) / tiles.length) * 3;
+        snapRing();
+        ringIdle = false;
+        stableSince = t + 1500; // let the swipe play out before a held gesture re-centres
+      }
       if (!ev.id.startsWith("swipe")) logGesture(ev.id, color);
     }
     updatePanel(state, t, landmarkMs);
   }
 
-  if (ringIdle) ringTarget += dt * 0.08;
-  ring.rotation.y += (ringTarget - ring.rotation.y) * Math.min(1, dt * 4);
+  if (ringIdle) ringTarget += dt * 0.035; // slow showroom drift
+  stepRing(Math.min(dt, 0.05));
   for (const tile of tiles) {
     tile.userData.lift += ((tile.userData.active ? 1 : 0) - tile.userData.lift) * Math.min(1, dt * 8);
     const s = 1 + tile.userData.lift * 0.45;
