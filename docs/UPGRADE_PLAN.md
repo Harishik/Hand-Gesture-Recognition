@@ -76,7 +76,7 @@ A recruiter or ML engineer skimming the repo should see:
 |---|---|---|
 | **Ultralytics Hand-Keypoints** (26,768 images, 21 kpts) | Train a YOLO26-pose hand-landmark model as an alternative to MediaPipe | Ready YOLO format, ~369 MB; [docs](https://docs.ultralytics.com/datasets/pose/hand-keypoints) |
 | **IPN Hand** (4k+ gestures, 800k frames, 50 subjects, 13 classes) | Dynamic/continuous gestures (swipe, click, zoom) | [GitHub](https://github.com/GibranBenitez/IPN-hand); check the licence in the repo |
-| **Jester** (148k clips, 27 classes) | Large-scale dynamic gestures | Registration required; reported as **CC BY-NC-ND 4.0**, so fine for research or a portfolio but not commercial use |
+| **Jester** (148k clips, 27 classes) | Large-scale dynamic gestures | Registration required; reported as **CC BY-NC-ND 4.0** (non-commercial, no derivatives), so research use only |
 | **FreiHAND / InterHand2.6M** | Only if you go to 3D hand pose | Optional stretch |
 
 ### What to do with your hand-made images

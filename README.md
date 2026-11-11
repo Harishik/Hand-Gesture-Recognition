@@ -15,6 +15,7 @@
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-HandLandmarker-0097A7?logo=google&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-0.160-000000?logo=threedotjs&logoColor=white)
 ![No build step](https://img.shields.io/badge/web-no%20build%20step-555)
+[![License: MIT](https://img.shields.io/badge/License-MIT-f5f5f7.svg)](LICENSE)
 
 <br/>
 
@@ -291,10 +292,13 @@ python scripts/make_gif.py out/ docs/media/studio.gif
 
 The original class project compared 50×50 grayscale crops against 34 photos of one person using SSIM. It recognised 6 gestures, could not reject other hand shapes, and its on-screen "accuracy" was a similarity score. It is kept in `src/hgr/legacy/` as a baseline; the plan that took it to this version is in [docs/UPGRADE_PLAN.md](docs/UPGRADE_PLAN.md).
 
-## Licensing and credits
+## License
 
-> [!IMPORTANT]
-> This repository does not yet include a licence file, so all rights are reserved by default. The gesture models are trained on **HaGRIDv2**, which is released under a variant of **CC BY-SA 4.0** ([terms](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf)); check those terms before using the trained models commercially.
+The code is released under the [MIT License](LICENSE).
+
+The gesture models in `web/models` were trained on **HaGRIDv2**, which has its own licence, a variant of **CC BY-SA 4.0** ([terms](https://github.com/hukenovs/hagrid/blob/master/license/en_us.pdf)). Please read those terms if you reuse the trained models.
+
+## Credits
 
 - **Data:** HaGRIDv2 by Nuzhdin et al. ([arXiv:2412.01508](https://arxiv.org/abs/2412.01508)); HANDS by Nuzzi et al. (CC BY 4.0) for the cross-dataset test.
 - **Hand tracking:** [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) by Google.

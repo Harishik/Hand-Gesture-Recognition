@@ -41,6 +41,3 @@ Thumbs.db
 
 # Local test media for the web app
 web/test-media/
-
-# Local editor/agent config
-.claude/

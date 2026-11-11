@@ -290,7 +290,10 @@ function barsIn(video) {
  */
 export function embeddedBrowser() {
   const ua = navigator.userAgent;
-  if (/Electron\/|\bClaude\/\d|; wv\)|FBAN|FBAV|Instagram|Line\//.test(ua)) return true;
+  if (/Electron\/|; wv\)|FBAN|FBAV|Instagram|Line\//.test(ua)) return true;
+  // Desktop app shells put their own name before "Chrome/" (regular browsers start with "Chrome/" there).
+  const shell = /like Gecko\) (\w+)\/[\d.]+ Chrome\//.exec(ua)?.[1];
+  if (shell && !["SamsungBrowser", "HeadlessChrome", "Version"].includes(shell)) return true;
   try {
     if (window.top !== window && document.featurePolicy && !document.featurePolicy.allowsFeature("camera")) return true;
   } catch {
