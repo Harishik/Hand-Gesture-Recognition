@@ -150,13 +150,27 @@ function makeHand() {
   const label = makeLabel();
   scene.add(label.sprite);
   group.visible = trail.visible = false;
-  return { group, joints, bones, boneMat, trail, trailPts: [], label, pts: Array.from({ length: 21 }, () => new THREE.Vector3()) };
+  return { group, joints, bones, boneMat, trail, trailPts: [], label, pts: Array.from({ length: 21 }, () => new THREE.Vector3()),
+    target: Array.from({ length: 21 }, () => new THREE.Vector3()), fresh: true };
 }
 const hands3d = [makeHand(), makeHand()];
 
+// Tracking arrives at camera rate (~30 Hz) but we render at display rate: updateHand only sets targets, and drawHand
+// glides the skeleton towards them every frame, so motion stays fluid instead of stepping.
 function updateHand(h3, hand, color) {
+  hand.landmarks.forEach(([x, y], i) => toScene(x, y, hand.depth?.[i] ?? 0, h3.target[i]));
+  if (h3.fresh) h3.pts.forEach((p, i) => p.copy(h3.target[i])); // first sighting: no fly-in from the origin
+  h3.fresh = false;
+  h3.color = color;
+  h3.group.visible = h3.trail.visible = true;
+}
+
+function drawHand(h3, dt) {
+  if (!h3.group.visible) return;
+  const a = 1 - Math.exp(-dt * 22); // ~45 ms time constant: smooth, still responsive
+  h3.pts.forEach((p, i) => p.lerp(h3.target[i], a));
+  const color = h3.color;
   const k = screenW / 3.7;
-  hand.landmarks.forEach(([x, y], i) => toScene(x, y, hand.depth?.[i] ?? 0, h3.pts[i]));
   h3.pts.forEach((p, i) => {
     const r = ([4, 8, 12, 16, 20].includes(i) ? 0.03 : i === 0 ? 0.034 : 0.022) * k;
     h3.joints.setMatrixAt(i, tmpM.makeScale(r, r, r).setPosition(p));
@@ -188,6 +202,7 @@ function updateHand(h3, hand, color) {
 }
 
 function hideHand(h3) {
+  h3.fresh = true;
   h3.group.visible = h3.trail.visible = h3.label.sprite.visible = false;
   h3.trailPts = [];
 }
@@ -415,7 +430,10 @@ function setNow(id, color) {
 }
 
 function updatePanel(state, t, landmarkMs) {
-  hud.land = hud.land ? 0.9 * hud.land + 0.1 * (landmarkMs + state.classifyMs) : landmarkMs + state.classifyMs;
+  const ms = landmarkMs + state.classifyMs;
+  hud.frames = (hud.frames ?? 0) + 1;
+  // Skip the first frames: they include model and GPU warm-up and would poison the running average for seconds.
+  if (hud.frames > 10) hud.land = hud.land ? 0.9 * hud.land + 0.1 * ms : ms;
   const primary = state.hands[0];
   const id = state.pair?.id ?? primary?.label ?? null;
   // Throttle text updates to 10 Hz, but never let the panel disagree with the 3D label: a change of gesture or hand
@@ -425,7 +443,7 @@ function updatePanel(state, t, landmarkMs) {
   hud.last = t;
   hud.key = key;
   $("fps").textContent = hud.fps.toFixed(0);
-  $("latency").textContent = hud.land.toFixed(0);
+  $("latency").textContent = hud.land ? hud.land.toFixed(0) : "–";
   const color = state.pair ? "#ece8e1" : channelOf(primary?.handedness);
   document.querySelector(".now").style.setProperty("--hand", color);
   setNow(id, color);
@@ -552,6 +570,7 @@ function animate() {
   camTarget.set(cameraBase.x + (c ? (c.x - 0.5) * 0.35 : 0), cameraBase.y + (c ? (0.5 - c.y) * 0.2 : 0), cameraBase.z);
   camera.position.lerp(camTarget, 0.04);
   camera.lookAt(cameraBase.x * 0.85, SCREEN_Y - 0.35, 0);
+  hands3d.forEach((h3) => drawHand(h3, dt));
   composer.render();
 }
 

@@ -38,17 +38,57 @@ export class GestureEngine {
    * hands: [{ landmarks: [[x, y], ...21], handedness: "Left" | "Right" }] in raw image coordinates.
    * Returns { hands, pair, events, cursor, classifyMs }.
    */
+  /** Matches hands to existing tracks by nearest palm position (greedy); unmatched hands get a new track. */
+  assignTracks(hands) {
+    const free = [...this.tracks.entries()].filter(([, tr]) => tr.anchor);
+    return hands.map((h) => {
+      const p = h.landmarks[9];
+      let best = -1;
+      let bestD = 0.2; // max palm travel between frames, in normalised image units
+      free.forEach(([, tr], j) => {
+        const d = Math.hypot(tr.anchor[0] - p[0], tr.anchor[1] - p[1]);
+        if (d < bestD) { bestD = d; best = j; }
+      });
+      if (best >= 0) return free.splice(best, 1)[0][0];
+      this.nextTrack = (this.nextTrack ?? 0) + 1;
+      return `hand${this.nextTrack}`;
+    });
+  }
+
+  /**
+   * Label hysteresis: the shown label only changes when the challenger clearly leads (by a margin) or has been on
+   * top for a short time. Stops one-frame flickers while a hand moves between poses.
+   */
+  stableLabel(track, top, s, tMs) {
+    const want = top[0].p >= s.minConfidence ? top[0].id : "no_gesture";
+    const cur = track.shown ?? want;
+    if (want === cur) { track.shown = cur; track.challenger = null; return cur; }
+    const idx = this.hand.classes.indexOf(cur);
+    const curP = idx >= 0 ? track.probs[idx] : 0;
+    const margin = top[0].p - curP;
+    if (!track.challenger || track.challenger.id !== want) track.challenger = { id: want, since: tMs };
+    if (margin > 0.35 || tMs - track.challenger.since >= 150) {
+      track.shown = want;
+      track.challenger = null;
+    }
+    return track.shown;
+  }
+
   update(hands, tMs, aspect) {
     const t0 = performance.now();
     const s = this.settings;
     const events = [];
     const seen = new Set();
 
+    // Follow each hand by where it is, not by MediaPipe's Left/Right label: that label often flips mid-transition,
+    // which used to reset the smoothing and let a single raw frame through (e.g. a fist briefly read as another class).
+    const keys = this.assignTracks(hands);
     const out = hands.map((h, i) => {
-      const key = seen.has(h.handedness) ? `${h.handedness}#${i}` : h.handedness;
+      const key = keys[i];
       seen.add(key);
       const track = this.tracks.get(key) ?? { probs: null, dwell: null, history: [], pinching: false };
       this.tracks.set(key, track);
+      track.anchor = h.landmarks[9];
 
       const features = featurize(h.landmarks, aspect);
       const probs = this.hand.predictProba(features, s.rejectBias);
@@ -56,8 +96,9 @@ export class GestureEngine {
       const order = track.probs.map((p, c) => [p, c]).sort((a, b) => b[0] - a[0]);
       const top = order.slice(0, 5).map(([p, c]) => ({ id: this.hand.classes[c], p }));
 
-      let label = top[0].p >= s.minConfidence ? top[0].id : "no_gesture";
-      let confidence = top[0].p;
+      let label = this.stableLabel(track, top, s, tMs);
+      let confidence = label === "no_gesture" ? 1 - top[0].p : track.probs[this.hand.classes.indexOf(label)] ?? top[0].p;
+      if (label === top[0].id) confidence = top[0].p;
       const custom = this.custom.items.length ? this.custom.match(this.hand.embed(features)) : null;
       if (custom) {
         label = custom.id;

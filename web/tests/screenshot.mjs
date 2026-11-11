@@ -39,10 +39,16 @@ for (const [name, path] of [["studio", "/"], ["classic", "/classic.html"]]) {
   await send("Page.navigate", { url: `${BASE}${path}?video=test-media/demo.webm&autostart` });
   // Wait for a confident, steady prediction (>= 90% on two checks 1.5 s apart) so the ring has settled.
   const confident = async () => {
-    const { result } = await send("Runtime.evaluate", { expression: "document.body.innerText" });
-    const text = result.value || "";
-    const pct = Math.max(0, ...[...text.matchAll(/(\d+)%/g)].slice(0, 2).map((m) => +m[1]));
-    return !/No hand|No gesture|Starting camera/.test(text.slice(0, 600)) && pct >= 90;
+    // Studio exposes #now-name / #now-conf; the classic page exposes its state on window.__gestureStudio.
+    const expr = `(() => {
+      const n = document.getElementById("now-name"), c = document.getElementById("now-conf");
+      if (n && c) return [n.textContent, +c.textContent / 100];
+      const h = window.__gestureStudio?.state?.hands?.[0];
+      return h ? [h.label, h.confidence] : ["", 0];
+    })()`;
+    const { result } = await send("Runtime.evaluate", { expression: expr, returnByValue: true });
+    const [name, conf] = result.value || ["", 0];
+    return name && !/^no[ _]/i.test(name) && conf >= 0.9;
   };
   for (let t = 0; t < 120; t++) {
     await sleep(500);
