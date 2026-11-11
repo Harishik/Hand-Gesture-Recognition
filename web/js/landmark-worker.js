@@ -10,6 +10,8 @@ let landmarker = null;
 let lastTs = 0;
 
 async function init(prefer = "GPU") {
+  const stage = (text) => self.postMessage({ type: "stage", text });
+  stage("Loading the hand tracker");
   const { FilesetResolver, HandLandmarker } = await import(BUNDLE);
   const vision = await FilesetResolver.forVisionTasks(WASM);
   const options = (delegate) => ({
@@ -20,6 +22,7 @@ async function init(prefer = "GPU") {
   });
   const order = prefer === "CPU" ? ["CPU", "GPU"] : ["GPU", "CPU"];
   let delegate;
+  stage("Loading the hand model");
   try {
     landmarker = await HandLandmarker.createFromOptions(vision, options(order[0]));
     delegate = order[0];
@@ -27,6 +30,7 @@ async function init(prefer = "GPU") {
     landmarker = await HandLandmarker.createFromOptions(vision, options(order[1]));
     delegate = order[1];
   }
+  stage(delegate === "GPU" ? "Preparing the graphics card" : "Preparing the processor");
   // Warm-up: the first inference compiles GPU shaders and can take many seconds. Do it now, while the page still
   // says "Loading", instead of after the camera starts.
   try {

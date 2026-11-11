@@ -34,6 +34,14 @@ export function bindHelp(dialog, button) {
   return () => (dialog.open ? dialog.close() : dialog.showModal());
 }
 
+/** Screen-reader announcement of a confirmed event (the visual panels update far too often to be live regions). */
+export function announce(text) {
+  const el = document.getElementById("announce");
+  if (!el) return;
+  el.textContent = "";
+  requestAnimationFrame(() => (el.textContent = text));
+}
+
 /** True when a keyboard shortcut should be ignored because the user is typing or using a control. */
 export const typing = (e) =>
   e.metaKey || e.ctrlKey || e.altKey || Boolean(e.target.closest?.("input, textarea, select, [contenteditable]"));

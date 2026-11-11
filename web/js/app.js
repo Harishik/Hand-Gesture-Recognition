@@ -7,7 +7,7 @@ import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { HandScene } from "./scene3d.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { bindHelp, notice, typing } from "./ui.js";
+import { announce, bindHelp, notice, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -28,12 +28,18 @@ const els = {
 const ctx = els.overlay.getContext("2d");
 const tracker = new HandTracker(els.video);
 const custom = tracker.custom;
-const lab = new HandScene($("lab3d"));
+let lab = null;
+try {
+  lab = new HandScene($("lab3d"));
+} catch (err) {
+  console.warn("3D lab unavailable (no WebGL)", err);
+  document.querySelector(".card.lab").hidden = true;
+}
 // Render the 3D lab only while it is on screen, so it doesn't compete with hand tracking for the GPU.
 let labVisible = false;
 new IntersectionObserver(([entry]) => (labVisible = entry.isIntersecting)).observe($("lab3d"));
 onFrame((dt) => {
-  if (!labVisible) return;
+  if (!labVisible || !lab) return;
   lab.tau = tracker.smoothTau;
   lab.render(dt);
 });
@@ -147,6 +153,40 @@ function celebrate() {
   }
 }
 
+/**
+ * Shows only the picture's content box (letterbox bars cropped), centred on the dark stage. The stage keeps a
+ * sensible shape (4:3 to 16:9, never taller than wide); the video and overlay are positioned so the content box fills
+ * its slot, and clip-path hides the bars. Honours the mirror setting.
+ */
+function applyCrop() {
+  const { videoWidth: vw, videoHeight: vh } = els.video;
+  if (!vw) return;
+  const c = tracker.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+  const content = (vw * c.w) / (vh * c.h);
+  const stage = Math.min(16 / 9, Math.max(4 / 3, content));
+  els.stage.style.aspectRatio = String(stage);
+  // The content box's slot on the stage, in % of the stage.
+  const slotW = content < stage ? (content / stage) * 100 : 100;
+  const slotH = content > stage ? (stage / content) * 100 : 100;
+  const slotL = (100 - slotW) / 2;
+  const slotT = (100 - slotH) / 2;
+  const x0 = settings.mirror ? 1 - c.x - c.w : c.x; // content box in display (mirrored) coordinates
+  const pct = (v) => `${v.toFixed(3)}%`;
+  for (const el of [els.video, els.overlay]) {
+    // The video element is mirrored by its own transform, so its clip uses source coordinates; the overlay is
+    // drawn in display coordinates.
+    const cx = el === els.video ? c.x : x0;
+    Object.assign(el.style, {
+      inset: "auto",
+      width: pct(slotW / c.w),
+      height: pct(slotH / c.h),
+      left: pct(slotL - (x0 / c.w) * slotW),
+      top: pct(slotT - (c.y / c.h) * slotH),
+      clipPath: `inset(${pct(c.y * 100)} ${pct((1 - cx - c.w) * 100)} ${pct((1 - c.y - c.h) * 100)} ${pct(cx * 100)} round 2px)`,
+    });
+  }
+}
+
 function snapshot() {
   if (!running) {
     notice("Start the camera first, then snap.", { action: { label: "Start camera", run: () => begin() } });
@@ -154,12 +194,16 @@ function snapshot() {
   }
   const c = document.createElement("canvas");
   c.width = 320;
-  c.height = Math.round(320 / (els.video.videoWidth / els.video.videoHeight || 16 / 9));
+  const { videoWidth: vw, videoHeight: vh } = els.video;
+  const k = tracker.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+  c.height = Math.round((320 * vh * k.h) / (vw * k.w)) || 180;
   const g = c.getContext("2d");
+  // Snapshot exactly what the stage shows: the content box, mirrored if the view is.
+  const x0 = settings.mirror ? 1 - k.x - k.w : k.x;
   if (settings.mirror) { g.translate(c.width, 0); g.scale(-1, 1); }
-  g.drawImage(els.video, 0, 0, c.width, c.height);
+  g.drawImage(els.video, k.x * vw, k.y * vh, k.w * vw, k.h * vh, 0, 0, c.width, c.height);
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.drawImage(els.overlay, 0, 0, c.width, c.height);
+  g.drawImage(els.overlay, x0 * vw, k.y * vh, k.w * vw, k.h * vh, 0, 0, c.width, c.height);
   const strip = $("snap-strip");
   const img = new Image();
   img.src = c.toDataURL("image/jpeg", 0.85);
@@ -299,6 +343,7 @@ function syncSettings() {
   }
   for (const [id, key] of Object.entries(TOGGLES)) $(id).checked = settings[key];
   els.video.classList.toggle("mirror", settings.mirror);
+  if (running) applyCrop();
   $("cursor-toggle").setAttribute("aria-pressed", String(settings.cursor));
   if (tracker.engine) Object.assign(tracker.engine.settings, settings);
   store.set(SETTINGS_KEY, settings);
@@ -750,6 +795,7 @@ const logList = new SpringList(els.log, {
 });
 onFrame((dt) => logList.step(dt));
 function logEvent(ev, action) {
+  if (ev.id !== "pinch") announce(`${labelInfo(ev.id).name}${action ? `, ${ACTIONS[action]}` : ""}`);
   events.unshift({ key: `${ev.id}@${performance.now()}`, id: ev.id, action, time: new Date().toLocaleTimeString([], { hour12: false }) });
   events.length = Math.min(events.length, 10);
   logList.set(events);
@@ -856,7 +902,7 @@ onFrame((dt) => {
     }
 
     try {
-      lab.update(
+      lab?.update(
         state.hands.map((h) => h.world),
         state.hands.map((h) => h.landmarks),
         state.hands.map((h) => h.pair?.id ?? h.label),
@@ -897,7 +943,7 @@ function showProblem(problem) {
   $("problem-body").textContent = problem.body;
 }
 
-const ready = tracker.load();
+const ready = tracker.load((text) => setBoot(text, "busy"));
 ready
   .then(({ hand, pair, delegate }) => {
     Object.assign(tracker.engine.settings, settings);
@@ -933,7 +979,7 @@ async function begin(demo = params.get("video") || undefined) {
     const { videoWidth: vw, videoHeight: vh } = els.video;
     els.overlay.width = vw;
     els.overlay.height = vh;
-    els.stage.style.aspectRatio = `${vw} / ${vh}`;
+    applyCrop();
     els.start.hidden = true;
     hero?.stop();
     els.stage.classList.add("live");
@@ -941,7 +987,7 @@ async function begin(demo = params.get("video") || undefined) {
     const isDemo = source === "demo video";
     setCam("Starting tracking", "busy");
     waitingFirst = isDemo ? "Demo" : "Live";
-    $("slate-res").textContent = `${vw} × ${vh}${isDemo ? " · demo clip" : ""}`;
+    $("slate-res").textContent = isDemo ? "Demo clip" : `${vw} × ${vh}`;
     els.nowSub.textContent = "No hands in view";
   } catch (err) {
     console.error(err);
@@ -953,6 +999,12 @@ async function begin(demo = params.get("video") || undefined) {
   }
 }
 els.startBtn.addEventListener("click", () => begin());
+tracker.onEnded = () => {
+  running = false;
+  setCam("Camera lost", "err");
+  notice("The camera stopped. It may have been unplugged or taken by another app.", { tone: "err", timeout: 0, action: { label: "Reconnect", run: () => begin() } });
+};
+if (params.get("from") === "no-webgl") notice("The 3D studio needs WebGL, which this browser has turned off. Classic works without it.", { timeout: 10000 });
 demoBtn.addEventListener("click", () => begin(DEMO_CLIP));
 
 // ---------------------------------------------------------------- keyboard

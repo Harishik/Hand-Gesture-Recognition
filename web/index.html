@@ -6,6 +6,11 @@
   <title>Gesture Studio</title>
   <meta name="description" content="Real-time hand gesture recognition in the browser. 33 gestures, tracked in 3D, entirely on your device.">
   <meta name="theme-color" content="#09090b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Gesture Studio">
+  <meta property="og:description" content="Real-time hand gesture recognition in the browser. 33 gestures, tracked in 3D, entirely on your device.">
+  <meta property="og:image" content="assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,7 +72,7 @@
     </div>
 
     <aside class="inspector glass" id="inspector" tabindex="-1" aria-label="Recognition">
-      <section class="now" id="now" aria-live="polite" aria-atomic="true">
+      <section class="now" id="now">
         <div class="now-top">
           <canvas id="now-glyph" width="176" height="176" aria-hidden="true"></canvas>
           <span class="chan" id="now-chan">No hand</span>
@@ -119,6 +124,7 @@
     </dl>
   </dialog>
   <div class="notices" id="notices" aria-live="polite"></div>
+  <div class="sr-only" id="announce" aria-live="polite" aria-atomic="true"></div>
 
   <script type="importmap">
     {

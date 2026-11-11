@@ -11,7 +11,7 @@ import { GESTURES, gestureInfo } from "./gestures-meta.js";
 import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { bindHelp, notice, typing } from "./ui.js";
+import { announce, bindHelp, notice, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -33,6 +33,14 @@ const viewport = $("viewport");
 const canvas = $("scene");
 
 // ------------------------------------------------------------------ renderer and post-processing
+// Without WebGL there is no 3D studio: hand over to Classic, which explains and still recognises gestures.
+{
+  const probe = document.createElement("canvas");
+  if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) {
+    location.replace("classic.html?from=no-webgl");
+    throw new Error("WebGL unavailable");
+  }
+}
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25)); // leave GPU headroom for hand tracking
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -134,19 +142,23 @@ function buildMarks(w, h) {
 }
 
 let screenW = SCREEN_H * (16 / 9);
-function layoutScreen(aspect, mirror) {
-  screenW = SCREEN_H * aspect;
+let view = { x0: 0, y0: 0, w: 1, h: 1 }; // the visible part of the frame, in display (possibly mirrored) coordinates
+function layoutScreen(aspect, mirror, crop = { x: 0, y: 0, w: 1, h: 1 }) {
+  screenW = SCREEN_H * aspect * (crop.w / crop.h);
   screen.scale.set(screenW, SCREEN_H, 1);
   videoTexture.wrapS = THREE.RepeatWrapping;
-  videoTexture.repeat.x = mirror ? -1 : 1;
-  videoTexture.offset.x = mirror ? 1 : 0;
+  videoTexture.repeat.set(mirror ? -crop.w : crop.w, crop.h);
+  videoTexture.offset.set(mirror ? crop.x + crop.w : crop.x, 1 - crop.y - crop.h);
+  view = { x0: mirror ? 1 - crop.x - crop.w : crop.x, y0: crop.y, w: crop.w, h: crop.h };
   buildMarks(screenW, SCREEN_H);
   fit();
 }
 
 /** Display landmark (x, y in [0, 1], MediaPipe relative depth z) -> point on / in front of the screen. */
 function toScene(x, y, z, out) {
-  return out.set((x - 0.5) * screenW, -(y - 0.5) * SCREEN_H + SCREEN_Y, 0.03 - z * screenW * 0.9);
+  x = (x - view.x0) / view.w;
+  y = (y - view.y0) / view.h;
+  return out.set((x - 0.5) * screenW, -(y - 0.5) * SCREEN_H + SCREEN_Y, 0.03 - (z * screenW * 0.9) / view.w);
 }
 
 // ------------------------------------------------------------------ hands
@@ -684,6 +696,7 @@ function updatePanel(state, t, landmarkMs) {
 }
 
 function logGesture(id, color) {
+  announce(`${nameOf(id)} recognised`);
   const time = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
   takes.unshift({ key: `${id}@${performance.now()}`, id, color, time });
   takes.length = Math.min(takes.length, 6);
@@ -835,7 +848,7 @@ function setBoot(text, tone) {
 
 setIdle(true);
 
-const ready = Promise.all([tracker.load(), loadPoses(), document.fonts.ready]);
+const ready = Promise.all([tracker.load((text) => { setBoot(text, "busy"); btnLabel.textContent = "Loading"; }), loadPoses(), document.fonts.ready]);
 loadPoses().then((poses) => {
   posesReady = true;
   renderTips(); // glyphs need the pose data
@@ -885,7 +898,7 @@ async function begin(demo = params.get("video") || undefined) {
     await ready;
     tracker.stop();
     const source = await tracker.start(demo);
-    layoutScreen(tracker.aspect, tracker.engine.settings.mirror);
+    layoutScreen(tracker.aspect, tracker.engine.settings.mirror, tracker.crop);
     screen.visible = true;
     screenIn.set(1);
     running = true;
@@ -899,7 +912,7 @@ async function begin(demo = params.get("video") || undefined) {
     $("cam-state").textContent = "Starting tracking";
     $("cam-dot").className = "dot busy";
     waitingFirst = isDemo ? "Demo" : "Live";
-    $("slate-res").textContent = `${video.videoWidth} × ${video.videoHeight}${isDemo ? " · demo clip" : ""}`;
+    $("slate-res").textContent = isDemo ? "Demo clip" : `${video.videoWidth} × ${video.videoHeight}`;
     fit();
     $("inspector").focus({ preventScroll: true });
   } catch (err) {
@@ -913,6 +926,12 @@ async function begin(demo = params.get("video") || undefined) {
 }
 
 btn.addEventListener("click", () => begin());
+tracker.onEnded = () => {
+  running = false;
+  $("cam-dot").className = "dot err";
+  $("cam-state").textContent = "Camera lost";
+  notice("The camera stopped. It may have been unplugged or taken by another app.", { tone: "err", timeout: 0, action: { label: "Reconnect", run: () => begin() } });
+};
 demoBtn.addEventListener("click", () => begin(DEMO_CLIP));
 
 // ------------------------------------------------------------------ keyboard

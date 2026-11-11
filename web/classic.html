@@ -6,6 +6,11 @@
   <title>Gesture Studio · Classic</title>
   <meta name="description" content="Real-time hand gesture recognition in the browser: 33 gestures, two-hand gestures, swipes, air cursor and custom gestures, fully on-device.">
   <meta name="theme-color" content="#09090b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Gesture Studio · Classic">
+  <meta property="og:description" content="Real-time hand gesture recognition in the browser. 33 gestures, tracked in 3D, entirely on your device.">
+  <meta property="og:image" content="assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +50,7 @@
           <span>Camera <b id="slate-res">–</b></span>
           <span><b id="fps">–</b> fps</span>
         </div>
-        <div class="now" id="now" aria-live="polite" aria-atomic="true">
+        <div class="now" id="now">
           <span class="now-icon" id="now-icon"></span>
           <div class="now-text">
             <div class="now-name" id="now-name">Show your hand</div>
@@ -226,6 +231,7 @@
     <button class="btn ghost small" id="coach-ok">Got it</button>
   </div>
   <div class="notices" id="notices" aria-live="polite"></div>
+  <div class="sr-only" id="announce" aria-live="polite" aria-atomic="true"></div>
   <div class="burst" id="burst" aria-hidden="true"></div>
 
   <dialog class="sheet" id="help">

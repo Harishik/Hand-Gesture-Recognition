@@ -35,7 +35,9 @@ export class HandTracker {
   }
 
   /** Loads the gesture models and the hand landmarker (worker first; GPU delegate, CPU fallback). */
-  async load() {
+  async load(onStage = () => {}) {
+    this.onStage = onStage;
+    onStage("Loading gesture models");
     const [hand, pair] = await Promise.all([GestureModel.load("models/hand.json"), GestureModel.load("models/pair.json")]);
     this.engine = new GestureEngine(hand, pair, this.custom);
     if (!params.has("mainthread")) {
@@ -65,12 +67,14 @@ export class HandTracker {
       worker.onmessage = ({ data }) => {
         if (data.type === "ready") { clearTimeout(timer); worker.onmessage = (e) => this.onResult(e.data); resolve(data.delegate); }
         else if (data.type === "error") { clearTimeout(timer); reject(new Error(data.message)); }
+        else if (data.type === "stage") this.onStage?.(data.text);
       };
       worker.postMessage({ type: "init", prefer: (params.get("delegate") || "GPU").toUpperCase() });
     });
   }
 
   async loadMainThread() {
+    this.onStage?.("Loading the hand tracker");
     const { FilesetResolver, HandLandmarker } = await import(BUNDLE);
     const vision = await FilesetResolver.forVisionTasks(WASM);
     const options = (delegate) => ({
@@ -102,12 +106,17 @@ export class HandTracker {
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
         audio: false,
       });
+      // Unplugged camera, revoked permission, or another app taking the device.
+      this.video.srcObject.getVideoTracks().forEach((track) => track.addEventListener("ended", () => this.onEnded?.(), { once: true }));
     }
     this.video.muted = true;
     this.video.playsInline = true;
     await this.video.play();
     if (this.video.readyState < 2) await new Promise((r) => this.video.addEventListener("loadeddata", r, { once: true }));
     this.source = demo ? "demo video" : `${this.video.videoWidth}×${this.video.videoHeight}`;
+    // Video files may carry baked-in letterbox / pillarbox bars; crop them from the picture (landmarks are remapped
+    // by the views). Live cameras are never cropped: a plain wall at the frame edge must not be mistaken for a bar.
+    this.crop = demo ? await detectBars(this.video) : FULL;
     return this.source;
   }
 
@@ -122,7 +131,7 @@ export class HandTracker {
 
   /** Sends the current video frame to the worker if it is new and the worker is idle. */
   pump() {
-    if (this.inFlight || this.video.readyState < 2 || this.video.currentTime === this.lastVideoTime) return;
+    if (this.inFlight || document.hidden || this.video.readyState < 2 || this.video.currentTime === this.lastVideoTime) return;
     this.lastVideoTime = this.video.currentTime;
     this.inFlight = true;
     const t = performance.now();
@@ -181,6 +190,86 @@ export class HandTracker {
     }));
     return this.finish(hands, t0, landmarkMs);
   }
+}
+
+const FULL = { x: 0, y: 0, w: 1, h: 1 };
+
+/**
+ * Content box of a video file, cropping uniform letterbox / pillarbox bars. Clips can be several takes with different
+ * framing, so frames are sampled across the whole clip (on a separate, hidden element) and the union of their
+ * content is kept: no take is ever cut.
+ */
+async function detectBars(video) {
+  try {
+    const probe = document.createElement("video");
+    probe.muted = true;
+    probe.preload = "auto";
+    probe.src = video.currentSrc || video.src;
+    await new Promise((resolve, reject) => {
+      probe.addEventListener("loadeddata", resolve, { once: true });
+      probe.addEventListener("error", reject, { once: true });
+    });
+    const duration = Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : 0;
+    const times = duration ? [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95].map((f) => f * duration) : [0];
+    let box = null;
+    for (const t of times) {
+      if (duration) {
+        probe.currentTime = t;
+        await new Promise((r) => probe.addEventListener("seeked", r, { once: true }));
+      }
+      const b = barsIn(probe);
+      box = box
+        ? { x0: Math.min(box.x0, b.x), y0: Math.min(box.y0, b.y), x1: Math.max(box.x1, b.x + b.w), y1: Math.max(box.y1, b.y + b.h) }
+        : { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+    }
+    probe.removeAttribute("src");
+    probe.load();
+    return { x: box.x0, y: box.y0, w: box.x1 - box.x0, h: box.y1 - box.y0 };
+  } catch {
+    return FULL;
+  }
+}
+
+/** Uniform bars at the edges of the frame currently shown by `video`, as a content box. */
+function barsIn(video) {
+  const W = 160;
+  const H = Math.max(1, Math.round((W * video.videoHeight) / video.videoWidth));
+  const c = new OffscreenCanvas(W, H);
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(video, 0, 0, W, H);
+  const px = g.getImageData(0, 0, W, H).data;
+  const at = (x, y, k) => px[(y * W + x) * 4 + k];
+  // A line is "bar" if it is flat (low spread) and the same colour as the outermost line on that side.
+  const line = (n, len, get) => {
+    const mean = [0, 1, 2].map((k) => { let s = 0; for (let i = 0; i < len; i++) s += get(n, i, k); return s / len; });
+    let spread = 0;
+    for (let i = 0; i < len; i++) for (let k = 0; k < 3; k++) spread = Math.max(spread, Math.abs(get(n, i, k) - mean[k]));
+    return { mean, spread };
+  };
+  const scan = (count, len, get) => {
+    const ref = line(0, len, get);
+    if (ref.spread > 24) return 0;
+    let n = 0;
+    while (n < count / 2) {
+      const l = line(n, len, get);
+      if (l.spread > 24 || l.mean.some((v, k) => Math.abs(v - ref.mean[k]) > 12)) break;
+      n++;
+    }
+    return n;
+  };
+  const left = scan(W, H, (n, i, k) => at(n, i, k));
+  const right = scan(W, H, (n, i, k) => at(W - 1 - n, i, k));
+  const top = scan(H, W, (n, i, k) => at(i, n, k));
+  const bottom = scan(H, W, (n, i, k) => at(i, H - 1 - n, k));
+  const box = { x: left / W, y: top / H, w: (W - left - right) / W, h: (H - top - bottom) / H };
+  // Ignore slivers (<4%) and implausible results.
+  if (left / W < 0.04 && right / W < 0.04) { box.x = 0; box.w = 1; }
+  if (top / H < 0.04 && bottom / H < 0.04) { box.y = 0; box.h = 1; }
+  if (box.w < 0.2 || box.h < 0.2) return FULL;
+  // Pull the edges in by one sample so no bar colour bleeds at the border.
+  const ix = box.w < 1 ? 1 / W : 0;
+  const iy = box.h < 1 ? 1 / H : 0;
+  return { x: box.x + ix, y: box.y + iy, w: box.w - 2 * ix, h: box.h - 2 * iy };
 }
 
 /** Plain-language explanation of a getUserMedia failure: { title, body } for the onboarding screen. */
