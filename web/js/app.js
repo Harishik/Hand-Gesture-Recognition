@@ -5,7 +5,10 @@ import { GESTURES, gestureInfo } from "./gestures-meta.js";
 import { glyphURL, loadPoses } from "./glyph.js";
 import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
+import { HandInspector } from "./inspector.js";
 import { HandScene } from "./scene3d.js";
+import { LiveSlides, SLIDE_COUNT } from "./slides.js";
+import { AmbientSynth } from "./synth.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
 import { announce, bindHelp, notice, session, showProblem, typing } from "./ui.js";
 
@@ -31,6 +34,8 @@ const custom = tracker.custom;
 let lab = null;
 try {
   lab = new HandScene($("lab3d"));
+  lab.object.visible = false; // the Studio has the hologram; here the hand itself is the subject
+  lab.resize();
 } catch (err) {
   console.warn("3D lab unavailable (no WebGL)", err);
   document.querySelector(".card.lab").hidden = true;
@@ -78,36 +83,35 @@ const store = {
 };
 let bindings = { ...DEFAULT_BINDINGS, ...store.get(BINDINGS_KEY, {}) };
 
-// Each slide: kicker, title, body, stat, glyphs drawn from the real pose data, accent colour.
-const SLIDES = [
-  ["Navigate", "Swipe to move", "Open your hand and flick left or right. Speed is normalised by palm size, so it works at any distance.", "320 ms", ["palm", "stop", "palm"], "#7fa8ff"],
-  ["Vocabulary", "33 gestures", "26 one-hand and 7 two-hand gestures, trained on 1.3M hands from HaGRIDv2.", "98.8%", ["peace", "ok", "rock", "like", "call", "fist"], "#ece8e1"],
-  ["Pointer", "Air cursor", "Your index fingertip, smoothed by a One Euro filter. Pinch to click, pinch and drag sliders.", "~1 ms", ["point", "grip", "one"], "#ffb25c"],
-  ["Personalise", "Teach it yours", "Record any pose for three seconds. It is matched in the model's learned embedding.", "3 s", ["three_gun", "little_finger", "thumb_index"], "#7fa8ff"],
-  ["Privacy", "Never uploaded", "Tracking and classification run entirely in this tab, on your GPU. No frames leave the device.", "0 bytes", ["holy", "hand_heart"], "#6fd39b"],
-];
 const deck = { slide: 0, playing: false, volume: 0.6, muted: false, likes: 0, dislikes: 0, snaps: 0 };
+const synth = new AmbientSynth();
+const inspector = new HandInspector($("inspector-panel"));
+let framesAnalysed = 0;
+let slides = null; // LiveSlides, built once the pose data is loaded
 const deckMotion = { slide: new Spring(0, { k: 120, zeta: 0.86 }), volume: new Spring(0.6, { k: 260, zeta: 1 }) };
 
 function renderDeck() {
   const track = $("slide-track");
-  if (!track.children.length) {
-    track.innerHTML = SLIDES.map(
-      ([k, t, p, stat, glyphs, c], i) => `<div class="slide" style="--c:${c}" role="group" aria-roledescription="slide" aria-label="${i + 1} of ${SLIDES.length}">
-        <div class="slide-art">${glyphs.map((g, j) => `<img src="${glyphURL(g, 64, c)}" alt="" style="--j:${j}">`).join("")}</div>
-        <div class="slide-copy"><span class="slide-kicker">${k}</span><h4>${t}</h4><p>${p}</p></div>
-        <b class="slide-stat">${stat}</b></div>`,
-    ).join("");
-    $("slide-dots").innerHTML = SLIDES.map(() => "<i></i>").join("");
-    $("eq").innerHTML = "<span></span>".repeat(28);
+  if (!slides) {
+    slides = new LiveSlides(track, {
+      labelInfo,
+      icon,
+      stats: () => ({ frames: framesAnalysed, mode: tracker.mode, delegate: tracker.delegate }),
+    });
+    $("slide-dots").innerHTML = Array.from({ length: SLIDE_COUNT }, () => "<i></i>").join("");
+    $("eq").innerHTML = "<span></span>".repeat(32);
   }
+  slides.setActive(deck.slide);
+  $("slide-count").textContent = `${deck.slide + 1} / ${SLIDE_COUNT}`;
   [...track.children].forEach((el, i) => el.setAttribute("aria-hidden", String(i !== deck.slide)));
   [...$("slide-dots").children].forEach((d, i) => d.classList.toggle("on", i === deck.slide));
   deckMotion.slide.set(deck.slide);
   deckMotion.volume.set(deck.volume);
   $("play-btn").setAttribute("aria-label", deck.playing ? "Pause" : "Play");
   $("play-icon").setAttribute("d", deck.playing ? "M4 2.5h3v11H4zM9 2.5h3v11H9z" : "M4 2.5v11l9-5.5z");
-  $("media-state").textContent = deck.playing ? (deck.muted ? "Playing · muted" : "Playing") : "Paused";
+  $("media-state").textContent = deck.playing ? (deck.muted ? "Playing · muted" : "Playing · 76 BPM") : "Paused";
+  synth.setVolume(deck.volume);
+  synth.setMuted(deck.muted);
   $("mute-btn").textContent = deck.muted ? "Unmute" : "Mute";
   $("volume-label").textContent = `${Math.round(deck.volume * 100)}%`;
   $("volume").setAttribute("aria-valuenow", Math.round(deck.volume * 100));
@@ -116,7 +120,12 @@ function renderDeck() {
 }
 
 // Slides, volume and the equaliser move every display frame.
-const eqLevels = new Float32Array(28);
+onFrame((dt) => {
+  slides?.step(dt);
+  inspector.step(dt);
+});
+const eqLevels = new Float32Array(32);
+const spectrum = new Float32Array(32);
 onFrame((dt, now) => {
   const pos = deckMotion.slide.step(dt);
   const slides = $("slide-track").children;
@@ -130,12 +139,11 @@ onFrame((dt, now) => {
   $("volume-fill").style.transform = `scaleX(${v.toFixed(4)})`;
   $("volume-knob").style.left = `${(v * 100).toFixed(2)}%`;
   const bars = $("eq").children;
-  const playing = deck.playing && !deck.muted;
+  // The equaliser shows the synth's real spectrum (it decays to rest on pause or mute).
+  synth.spectrum(spectrum);
   for (let i = 0; i < bars.length; i++) {
-    const target = playing && !reducedMotion.matches
-      ? (0.25 + 0.75 * Math.abs(Math.sin(now / 180 + i * 0.7) * Math.sin(now / 410 + i))) * (0.3 + 0.7 * deck.volume)
-      : 0.06;
-    eqLevels[i] += (target - eqLevels[i]) * approach(dt, 0.07);
+    const target = reducedMotion.matches ? 0.06 : Math.max(0.04, spectrum[i] ** 1.4);
+    eqLevels[i] += (target - eqLevels[i]) * approach(dt, 0.05);
     bars[i].style.transform = `scaleY(${Math.max(0.06, eqLevels[i]).toFixed(3)})`;
   }
 });
@@ -223,11 +231,16 @@ function syncSnaps() {
 }
 
 function runAction(action) {
-  const n = SLIDES.length;
+  const n = SLIDE_COUNT;
   switch (action) {
     case "next_slide": deck.slide = (deck.slide + 1) % n; break;
     case "prev_slide": deck.slide = (deck.slide - 1 + n) % n; break;
-    case "play_pause": deck.playing = !deck.playing; break;
+    case "play_pause":
+      deck.playing = !deck.playing;
+      if (deck.playing && !synth.play()) {
+        notice("Your browser holds sound back until you click the page once. Click anywhere, then play again.", { timeout: 6000 });
+      } else if (!deck.playing) synth.pause();
+      break;
     case "volume_up": deck.volume = Math.min(1, deck.volume + 0.1); break;
     case "volume_down": deck.volume = Math.max(0, deck.volume - 0.1); break;
     case "mute": deck.muted = !deck.muted; break;
@@ -238,6 +251,7 @@ function runAction(action) {
     case "toggle_cursor": settings.cursor = !settings.cursor; syncSettings(); break;
     case "reset_deck":
       Object.assign(deck, { slide: 0, playing: false, volume: 0.6, muted: false, likes: 0, dislikes: 0 });
+      synth.pause();
       $("snap-strip").replaceChildren();
       syncSnaps();
       break;
@@ -914,6 +928,10 @@ onFrame((dt) => {
     }
     if (waitingFirst) { setCam(waitingFirst, "live"); waitingFirst = null; }
     trackOverlay(state);
+    framesAnalysed += 1;
+    slides?.update(state, tracker.aspect);
+    const first = state.hands[0];
+    inspector.update(first, first ? labelInfo(first.pair?.id ?? first.label).name : "", channelOf(first?.handedness));
     updatePanels(state, t);
     updateCursor(state);
     updateTeach(state, t);
@@ -1023,6 +1041,8 @@ function stopSession() {
   setCam("Standby", "");
   for (const m of Object.values(metrics)) m.set(0);
   updatePanels({ hands: [], pair: null, events: [], classifyMs: 0 }, performance.now() + 1000);
+  slides?.update({ hands: [], pair: null, events: [] }, 1);
+  inspector.update(null, "", "#f5f5f7");
   els.startBtn.disabled = demoBtn.disabled = false;
   btnLabel.textContent = "Turn on camera";
   setBoot("Camera off", "");
@@ -1063,7 +1083,6 @@ renderDeck();
 syncSnaps();
 const poses = await loadPoses();
 document.querySelectorAll("img[data-glyph]").forEach((img) => (img.src = glyphURL(img.dataset.glyph, 28)));
-$("slide-track").replaceChildren();
 renderDeck();
 deckMotion.slide.jump(deck.slide);
 renderGestureGrid();

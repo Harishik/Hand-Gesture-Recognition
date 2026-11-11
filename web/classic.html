@@ -93,15 +93,19 @@
         </header>
         <div class="deck-grid">
           <article class="card lab">
-            <header class="card-head"><h3>3D lab</h3><span class="card-note">Fist and move to turn · two open hands to resize · pinch for a new finish · drag to orbit</span></header>
-            <canvas id="lab3d" aria-label="3D view of the tracked hand and a gesture-controlled object"></canvas>
+            <header class="card-head"><h3>Hand inspector</h3><span class="card-note">Your hand in true 3D, measured live · drag to orbit</span></header>
+            <div class="lab-body">
+              <canvas id="lab3d" aria-label="3D view of the tracked hand, which you can orbit"></canvas>
+              <div class="inspector-panel" id="inspector-panel" aria-live="off"></div>
+            </div>
           </article>
-          <article class="card slides" aria-roledescription="carousel" aria-label="Feature slides">
-            <header class="card-head"><h3>Slides</h3><span class="card-note">Swipe, or <kbd>←</kbd> <kbd>→</kbd></span></header>
-            <div class="slide-track" id="slide-track" aria-live="polite"></div>
+          <article class="card slides" aria-roledescription="carousel" aria-label="How it works">
+            <header class="card-head"><h3>How it works <span>live on your hand</span></h3><span class="card-note">Swipe, or <kbd>←</kbd> <kbd>→</kbd></span></header>
+            <div class="slide-track" id="slide-track"></div>
             <div class="slide-nav">
               <button class="btn" data-action="prev_slide" aria-label="Previous slide">←</button>
               <span id="slide-dots" aria-hidden="true"></span>
+              <span class="slide-count" id="slide-count">1 / 5</span>
               <button class="btn" data-action="next_slide" aria-label="Next slide">→</button>
             </div>
           </article>
@@ -112,7 +116,7 @@
                 <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path id="play-icon" d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
               </button>
               <div class="media-meta">
-                <div class="media-title">Lo-fi focus mix</div>
+                <div class="media-title">Night drive, generated</div>
                 <div class="media-sub" id="media-state">Paused</div>
               </div>
               <button class="btn ghost" data-action="mute" id="mute-btn">Mute</button>
@@ -122,7 +126,7 @@
               <div class="volume-fill" id="volume-fill"></div>
               <div class="volume-knob" id="volume-knob"></div>
             </div>
-            <div class="media-foot"><span>Volume <b id="volume-label">60%</b></span><span class="card-note">Pinch and drag the bar</span></div>
+            <div class="media-foot"><span>Volume <b id="volume-label">60%</b></span><span class="card-note">Synthesised live in your browser · no audio files</span></div>
           </article>
           <article class="card reactions">
             <header class="card-head"><h3>Reactions</h3></header>

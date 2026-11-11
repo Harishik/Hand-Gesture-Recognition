@@ -102,7 +102,7 @@ export class HandScene {
     // Narrow (portrait) views: centre the object above the hand instead of beside it.
     const narrow = w / h < 1.2;
     this.object.position.set(narrow ? 0 : 0.16, narrow ? 0.09 : 0, 0);
-    this.camera.position.z = narrow ? 0.85 : 0.62;
+    this.camera.position.z = (narrow ? 0.85 : 0.62) * (this.object?.visible === false ? 0.72 : 1);
   }
 
   /**
@@ -119,8 +119,11 @@ export class HandScene {
       }
       hand.group.visible = true;
       // Place each hand where it is on screen, so two hands appear side by side.
-      const ox = (screen[h][0][0] - 0.5) * 0.5;
-      const oy = -(screen[h][0][1] - 0.5) * 0.35;
+      // With the object shown, hands sit where they are on screen. As a pure hand inspector, the hand is centred
+      // (two hands keep their left / right separation) so it fills the view at any position in the camera frame.
+      const inspect = !this.object.visible;
+      const ox = inspect ? (screen.length > 1 ? (screen[h][0][0] - 0.5) * 0.3 : 0) : (screen[h][0][0] - 0.5) * 0.5;
+      const oy = inspect ? 0.02 : -(screen[h][0][1] - 0.5) * 0.35;
       const k = 1.8; // enlarge the real-size hand (~18 cm) for the scene
       pts.forEach(([x, y, z], i) => hand.target[i].set((mirror ? -x : x) * k + ox, -y * k + oy, -z * k));
       if (hand.fresh) hand.pts.forEach((p, i) => p.copy(hand.target[i]));

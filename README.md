@@ -39,7 +39,7 @@ A real-time hand gesture system with a full-screen **Three.js 3D interface**. Ev
 python scripts/serve_web.py      # then open http://localhost:8765 and press "Turn on camera" (or "Watch the demo" without a webcam)
 ```
 
-`classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings.
+`classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings. Its control deck is driven by your hands: a hand inspector (your hand in true 3D with live finger bend, span and pinch measurements), a five-step "how it works" explainer that runs on your own hand, and a player whose music is synthesised live with Web Audio.
 
 ## Screenshots
 
