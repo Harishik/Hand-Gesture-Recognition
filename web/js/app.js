@@ -7,7 +7,7 @@ import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { HandScene } from "./scene3d.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { announce, bindHelp, notice, typing } from "./ui.js";
+import { announce, bindHelp, notice, session, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -955,6 +955,12 @@ ready
     els.startBtn.disabled = false;
     btnLabel.textContent = "Turn on camera";
     if (params.has("autostart")) begin(); // demos and screenshots
+    else session.resumable().then((source) => {
+      // Coming from the Studio with the camera on: carry straight on.
+      if (!source || running) return;
+      setBoot("Resuming", "busy");
+      begin(source === "camera" ? undefined : source);
+    });
   })
   .catch((err) => {
     console.error(err);
@@ -987,7 +993,10 @@ async function begin(demo = params.get("video") || undefined) {
     const isDemo = source === "demo video";
     setCam("Starting tracking", "busy");
     waitingFirst = isDemo ? "Demo" : "Live";
-    $("slate-res").textContent = isDemo ? "Demo clip" : `${vw} × ${vh}`;
+    $("slate-res").textContent = isDemo ? "Demo clip" : `Camera · ${vw} × ${vh}`;
+    session.remember(demo ?? "camera");
+    $("stop-btn").hidden = false;
+    $("stop-btn").lastElementChild.textContent = isDemo ? "Stop demo" : "Stop camera";
     els.nowSub.textContent = "No hands in view";
   } catch (err) {
     console.error(err);
@@ -999,6 +1008,33 @@ async function begin(demo = params.get("video") || undefined) {
   }
 }
 els.startBtn.addEventListener("click", () => begin());
+
+/** Turns the camera (or clip) off and returns to the start screen. */
+function stopSession() {
+  if (teach.phase !== "idle") cancelTeach("Recording stopped with the camera.");
+  tracker.stop();
+  session.forget();
+  running = false;
+  waitingFirst = null;
+  latest = null;
+  drawn.clear();
+  ctx.clearRect(0, 0, els.overlay.width, els.overlay.height);
+  for (const el of [els.video, els.overlay]) el.removeAttribute("style");
+  els.stage.style.aspectRatio = "";
+  els.stage.classList.remove("live");
+  els.start.hidden = false;
+  hero?.start();
+  cur.on = false;
+  $("stop-btn").hidden = true;
+  setCam("Standby", "");
+  for (const m of Object.values(metrics)) m.set(0);
+  updatePanels({ hands: [], pair: null, events: [], classifyMs: 0 }, performance.now() + 1000);
+  els.startBtn.disabled = demoBtn.disabled = false;
+  btnLabel.textContent = "Turn on camera";
+  setBoot("Camera off", "");
+  announce("Camera off");
+}
+$("stop-btn").addEventListener("click", stopSession);
 tracker.onEnded = () => {
   running = false;
   setCam("Camera lost", "err");
@@ -1021,6 +1057,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "m") runAction("mute");
   else if (k === "s") runAction("snapshot");
   else if (k === "a") $("cursor-toggle").click();
+  else if (k === "x" && running) stopSession();
   else if (tabKeys.includes(k)) selectTab(tabs[Number(k) - 1].dataset.tab);
 });
 

@@ -42,6 +42,29 @@ export function announce(text) {
   requestAnimationFrame(() => (el.textContent = text));
 }
 
+const SOURCE_KEY = "gs.source";
+/** Remembers the running source for this tab ("camera" or a clip URL), so the other view can resume it. */
+export const session = {
+  remember(source) {
+    try { sessionStorage.setItem(SOURCE_KEY, source); } catch { /* storage unavailable */ }
+  },
+  forget() {
+    try { sessionStorage.removeItem(SOURCE_KEY); } catch { /* storage unavailable */ }
+  },
+  /** The source to resume, or null. A camera is only resumed if permission is already granted (no surprise prompt). */
+  async resumable() {
+    let source = null;
+    try { source = sessionStorage.getItem(SOURCE_KEY); } catch { return null; }
+    if (source !== "camera") return source;
+    try {
+      const p = await navigator.permissions?.query({ name: "camera" });
+      return p?.state === "granted" ? "camera" : null;
+    } catch {
+      return null;
+    }
+  },
+};
+
 /** True when a keyboard shortcut should be ignored because the user is typing or using a control. */
 export const typing = (e) =>
   e.metaKey || e.ctrlKey || e.altKey || Boolean(e.target.closest?.("input, textarea, select, [contenteditable]"));

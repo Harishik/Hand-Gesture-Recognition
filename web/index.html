@@ -35,6 +35,10 @@
       <span class="readout lat"><b id="latency">–</b> ms</span>
       <span class="readout dev" id="device" title="Where hand tracking runs">–</span>
     </div>
+    <button class="btn small stop-btn" id="stop-btn" hidden title="Stop (X)">
+      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+      <span>Stop</span>
+    </button>
     <button class="btn ghost icon" id="help-btn" aria-label="Keyboard shortcuts" aria-haspopup="dialog"><kbd>?</kbd></button>
   </header>
 
@@ -43,7 +47,7 @@
     <video id="video" playsinline muted hidden></video>
 
     <div class="slate" aria-hidden="true">
-      <span>Camera <b id="slate-res">–</b></span>
+      <span><b id="slate-res">–</b></span>
       <span><b id="timecode">00:00:00:00</b></span>
     </div>
 
@@ -119,7 +123,8 @@
       <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Spin the gesture ring</dd>
       <dt><kbd>F</kbd></dt><dd>Change the object's finish</dd>
       <dt><kbd>R</kbd></dt><dd>Reset the object</dd>
-      <dt><kbd>C</kbd></dt><dd>Open Classic</dd>
+      <dt><kbd>C</kbd></dt><dd>Open Classic (the camera stays on)</dd>
+      <dt><kbd>X</kbd></dt><dd>Stop the camera or demo</dd>
       <dt><kbd>?</kbd></dt><dd>Show this list</dd>
     </dl>
   </dialog>

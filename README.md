@@ -30,13 +30,13 @@
 ---
 
 A real-time hand gesture system with a full-screen **Three.js 3D interface**. Everything runs in the browser, on-device; no video leaves the tab.
-- **The scene:** your camera feed is a screen inside a 3D scene, and your tracked hands are rendered over it as glowing 3D skeletons with depth, bloom and fingertip light trails.
+- **The scene:** your camera feed is a screen inside a 3D scene, and your tracked hands are rendered over it as 3D skeletons with depth and fingertip light trails, coloured by hand (cobalt left, amber right).
 - **Gesture ring:** a 3D carousel of all 33 gestures. The one you're making flies forward.
 - **Hologram:** a 3D object you control with your hands. A fist grabs and rotates it, two open hands scale it, and a pinch recolours it.
-- **Effects:** every recognised gesture fires a particle burst, and the camera follows your hand with a slight parallax.
+- **Motion:** hand detection runs in a Web Worker, so the scene renders at display rate while the model works; every value on screen eases with frame-rate independent springs, and the camera follows your hand with a slight parallax.
 
 ```bash
-python scripts/serve_web.py      # then open http://localhost:8765 and press "Start camera"
+python scripts/serve_web.py      # then open http://localhost:8765 and press "Turn on camera" (or "Watch the demo" without a webcam)
 ```
 
 `classic.html` is a 2D dashboard with more controls: per-gesture action bindings, teaching custom gestures, an air cursor that clicks page controls, and settings.
@@ -60,7 +60,7 @@ python scripts/serve_web.py      # then open http://localhost:8765 and press "St
 | **Air cursor** | Index fingertip with a One Euro filter; pinch to click any control, pinch-drag sliders |
 | **Dwell to confirm** | A gesture must be held for 450 ms to fire, once per hold; avoids accidental triggers |
 | **Teach a gesture** | Few-shot nearest neighbour in the MLP's learned embedding space; saved in the browser |
-| **3D interface** (Three.js, `index.html`) | Video screen in 3D space, depth-aware neon hand skeletons (bloom + light trails), 33-gesture carousel, hand-controlled hologram, particle bursts, parallax camera |
+| **3D interface** (Three.js, `index.html`) | Video screen in 3D space, depth-aware hand skeletons with light trails, 33-gesture carousel, hand-controlled hologram, confirmation pulses, parallax camera; detection in a Web Worker |
 | **Gesture → action bindings** | Every gesture can drive a demo control deck (slides, media player, reactions, snapshots), remappable in the UI |
 | **Live diagnostics** | Top-5 probabilities per hand, FPS, landmark and classifier latency, event log |
 
@@ -162,7 +162,8 @@ The models are trained in PyTorch, then exported with BatchNorm folded into the 
 ├── web/                   # the browser app (no build step)
 │   ├── index.html         # 3D studio (Three.js) · classic.html: 2D dashboard
 │   ├── css/
-│   ├── js/                # studio3d (3D app), tracker, engine (dwell/swipe/pinch), features, mlp, custom, filters, app (classic)
+│   ├── js/                # studio3d (3D app), app (classic), tracker + landmark-worker (MediaPipe off the main thread),
+│   │                      # engine (dwell/swipe/pinch), features, mlp, custom, filters, motion (springs), hero, ui
 │   ├── models/            # exported classifiers (hand.json, pair.json) + parity fixture
 │   └── tests/parity.mjs   # JS vs Python check
 ├── src/hgr/               # Python: data, features, training, evaluation, real-time pipeline

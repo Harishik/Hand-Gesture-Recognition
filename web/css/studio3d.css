@@ -47,6 +47,8 @@ html, body { height: 100%; overflow: hidden; }
 .take-row { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: var(--s3); height: 36px; font-size: var(--t-small); }
 .take-row span { display: flex; align-items: center; gap: var(--s2); }
 .take-row .chip { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+#alts-note:not([hidden]) { animation: fade-note 240ms var(--ease-out); }
+@keyframes fade-note { from { opacity: 0; } }
 .empty-note, .idle-tips p { margin: 0; font-size: var(--t-small); color: var(--faint); }
 .idle-tips ul { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; gap: var(--s1); }
 .idle-tips li { display: grid; grid-template-columns: 32px 1fr; gap: 0 var(--s3); align-items: center; padding: 6px 0; animation: rise 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 60ms); }

@@ -96,6 +96,8 @@ export class HandTracker {
    * Starts the webcam, or a looping video file: `demo` if given, else `?video=<url>` in the page URL (demos, tests).
    */
   async start(demo = params.get("video")) {
+    this.latest = null; // never hand out a result from a previous session
+    this.lastVideoTime = -1;
     if (demo) {
       this.video.srcObject = null;
       this.video.src = demo;
@@ -120,9 +122,13 @@ export class HandTracker {
     return this.source;
   }
 
-  /** Stops the camera stream, if one is running. */
+  /** Stops the camera stream or clip, if one is running. */
   stop() {
     this.video.srcObject?.getTracks?.().forEach((t) => t.stop());
+    this.video.pause();
+    this.video.srcObject = null;
+    this.video.removeAttribute("src");
+    this.latest = null;
   }
 
   get aspect() {

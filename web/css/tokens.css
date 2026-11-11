@@ -149,6 +149,10 @@ kbd {
 .readout b { color: var(--bone); font-weight: 500; }
 .readout.source { color: var(--dim); }
 .readout.dev.cpu { color: var(--amber); }
+.stop-btn { gap: 6px; color: var(--dim); }
+.stop-btn svg { color: var(--rec); }
+@media (max-width: 600px) { .stop-btn { padding: 0 10px; } }
+@media (max-width: 420px) { .bar .readout.source span:last-child { display: none; } }
 
 /* ---------------------------------------------------------------- slate (camera id + timecode on the stage) */
 .slate { position: absolute; z-index: 2; left: var(--s5); right: var(--s5); top: 72px; display: flex; justify-content: space-between; pointer-events: none; opacity: 0; transition: opacity var(--slow) var(--ease-out); font-size: var(--t-cap); color: var(--faint); }

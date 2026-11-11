@@ -34,6 +34,10 @@
       <span class="readout"><b id="fps-top">–</b> fps</span>
       <span class="readout dev" id="status-delegate">–</span>
     </div>
+    <button class="btn small stop-btn" id="stop-btn" hidden title="Stop (X)">
+      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+      <span>Stop</span>
+    </button>
     <button class="btn cursor-toggle" id="cursor-toggle" aria-pressed="true" title="Air cursor (A)">
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
       <span>Air cursor</span>
@@ -47,7 +51,7 @@
         <video id="video" playsinline muted></video>
         <canvas id="overlay" aria-hidden="true"></canvas>
         <div class="slate" aria-hidden="true">
-          <span>Camera <b id="slate-res">–</b></span>
+          <span><b id="slate-res">–</b></span>
           <span><b id="fps">–</b> fps</span>
         </div>
         <div class="now" id="now">
@@ -242,6 +246,7 @@
       <dt><kbd>M</kbd></dt><dd>Mute</dd>
       <dt><kbd>S</kbd></dt><dd>Take a snapshot</dd>
       <dt><kbd>A</kbd></dt><dd>Air cursor on / off</dd>
+      <dt><kbd>X</kbd></dt><dd>Stop the camera or demo</dd>
       <dt><kbd>1</kbd>–<kbd>5</kbd></dt><dd>Switch panel tab</dd>
       <dt><kbd>Esc</kbd></dt><dd>Cancel a recording</dd>
       <dt><kbd>?</kbd></dt><dd>Show this list</dd>

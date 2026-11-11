@@ -11,7 +11,7 @@ import { GESTURES, gestureInfo } from "./gestures-meta.js";
 import { PoseHero } from "./hero.js";
 import { approach, onFrame, reducedMotion, Spring, SpringList, stableRank, TweenNumber } from "./motion.js";
 import { describeCameraError, HandTracker } from "./tracker.js";
-import { announce, bindHelp, notice, typing } from "./ui.js";
+import { announce, bindHelp, notice, session, typing } from "./ui.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -635,13 +635,14 @@ function renderTips() {
 }
 
 let idle = null;
+let wantNote = false; // "no close alternatives": shown only once the last row has faded out
 let posesReady = false;
 function setIdle(on) {
   if (on === idle) return;
   idle = on;
   $("alts-idle").hidden = !on;
   $("alts").hidden = on;
-  if (on) $("alts-note").hidden = true;
+  if (on) wantNote = false;
   if (on) {
     altList.clear();
     if (posesReady) renderTips();
@@ -692,7 +693,7 @@ function updatePanel(state, t, landmarkMs) {
   // Only real contenders (>= 1%) are listed; a wall of 0% rows is noise, not information.
   const alts = stableRank(primary.top.filter((c) => c.id !== id && c.p >= 0.01).map((c) => ({ key: c.id, p: c.p })), [...altList.rows.keys()]).slice(0, 4);
   altList.set(alts);
-  $("alts-note").hidden = alts.length > 0;
+  wantNote = alts.length === 0;
 }
 
 function logGesture(id, color) {
@@ -720,6 +721,9 @@ onFrame((dt) => {
   $("hold-bar").style.transform = `scaleX(${h.toFixed(4)})`;
   for (const bar of ui.altBars.values()) bar.el.style.transform = `scaleX(${Math.max(0, bar.s.step(dt)).toFixed(4)})`;
   altList.step(dt);
+  const note = $("alts-note");
+  const showNote = wantNote && altList.rows.size === 0;
+  if (note.hidden === showNote) note.hidden = !showNote;
   takeList.step(dt);
   for (const key of ui.altBars.keys()) if (!altList.rows.has(key)) ui.altBars.delete(key);
 });
@@ -877,7 +881,15 @@ ready
       : "No usable GPU, so hand tracking runs on the processor. It still works, at a lower frame rate.";
     if (delegate !== "GPU") notice("Running on the CPU: WebGL acceleration isn't available in this browser.", { tone: "busy", timeout: 9000 });
     if (params.has("autostart")) queueMicrotask(() => begin()); // demos and screenshots
-    else btn.focus({ preventScroll: true });
+    else {
+      btn.focus({ preventScroll: true });
+      // Coming from Classic with the camera on: carry straight on.
+      session.resumable().then((source) => {
+        if (!source || running) return;
+        setBoot("Resuming", "busy");
+        begin(source === "camera" ? undefined : source);
+      });
+    }
   })
   .catch((err) => {
     console.error(err);
@@ -912,7 +924,10 @@ async function begin(demo = params.get("video") || undefined) {
     $("cam-state").textContent = "Starting tracking";
     $("cam-dot").className = "dot busy";
     waitingFirst = isDemo ? "Demo" : "Live";
-    $("slate-res").textContent = isDemo ? "Demo clip" : `${video.videoWidth} × ${video.videoHeight}`;
+    $("slate-res").textContent = isDemo ? "Demo clip" : `Camera · ${video.videoWidth} × ${video.videoHeight}`;
+    session.remember(demo ?? "camera");
+    $("stop-btn").hidden = false;
+    $("stop-btn").lastElementChild.textContent = isDemo ? "Stop demo" : "Stop camera";
     fit();
     $("inspector").focus({ preventScroll: true });
   } catch (err) {
@@ -926,6 +941,36 @@ async function begin(demo = params.get("video") || undefined) {
 }
 
 btn.addEventListener("click", () => begin());
+
+/** Turns the camera (or clip) off and returns to the start screen. */
+function stopSession() {
+  tracker.stop();
+  session.forget();
+  running = false;
+  waitingFirst = null;
+  latest = null;
+  hands3d.forEach(hideHand);
+  screenIn.set(0);
+  setTimeout(() => { if (!running) { screen.visible = false; stageVisible = false; } }, 500);
+  viewport.classList.remove("live");
+  startEl.hidden = false;
+  void startEl.offsetWidth;
+  startEl.classList.remove("leaving");
+  hero?.start();
+  $("stop-btn").hidden = true;
+  $("cam-dot").className = "dot";
+  $("cam-state").textContent = "Standby";
+  ui.fps.set(0);
+  ui.latency.set(0);
+  hud.fps = 0;
+  updatePanel({ hands: [], pair: null, events: [], classifyMs: 0 }, performance.now(), 0);
+  btn.disabled = demoBtn.disabled = false;
+  btnLabel.textContent = "Turn on camera";
+  setBoot("Camera off", "");
+  btn.focus({ preventScroll: true });
+  announce("Camera off");
+}
+$("stop-btn").addEventListener("click", stopSession);
 tracker.onEnded = () => {
   running = false;
   $("cam-dot").className = "dot err";
@@ -944,6 +989,7 @@ document.addEventListener("keydown", (e) => {
   else if (k === "f" || k === "F") setFinish(objectState.finish + 1), notice(`Finish: ${FINISHES[objectState.finish].name}`, { tone: "live", timeout: 1600 });
   else if (k === "r" || k === "R") { objectState.rotX = objectState.rotY = 0; objectState.scale.set(1); }
   else if (k === "c" || k === "C") location.href = "classic.html";
+  else if ((k === "x" || k === "X") && running) stopSession();
   else if (k === "Enter" && !startEl.hidden && !btn.disabled && document.activeElement === document.body) begin();
 });
 
