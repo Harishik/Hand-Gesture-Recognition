@@ -160,10 +160,16 @@ export function stableRank(items, previousKeys = [], margin = 0.05) {
 const subscribers = new Set();
 let last = performance.now();
 function tick(now) {
+  requestAnimationFrame(tick); // schedule first: one failing subscriber must never stop the clock
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  for (const fn of subscribers) fn(dt, now);
-  requestAnimationFrame(tick);
+  for (const fn of subscribers) {
+    try {
+      fn(dt, now);
+    } catch (err) {
+      console.error(err);
+    }
+  }
 }
 requestAnimationFrame(tick);
 export const onFrame = (fn) => (subscribers.add(fn), () => subscribers.delete(fn));

@@ -6,10 +6,6 @@
 // visible quantity towards its target per display frame with frame-rate independent springs / exponentials
 // (js/motion.js), so nothing on screen steps at camera rate.
 import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { drawGlyph, glyphCanvas, glyphURL, loadPoses } from "./glyph.js";
 import { GESTURES, gestureInfo } from "./gestures-meta.js";
 import { PoseHero } from "./hero.js";
@@ -62,11 +58,22 @@ const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 50);
 const cameraBase = new THREE.Vector3(0, 0.1, 4.6);
 camera.position.copy(cameraBase);
 
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.4, 0.82); // only bright hand strokes glow
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
+// No post-processing: a bloom pass cost ~4x the frame time and fought hand tracking for the GPU (measured p95
+// 133 ms vs 17 ms without). Glow is painted instead: additive halo sprites behind lit tiles.
+const HALO = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, "rgba(255,255,255,0.55)");
+  grad.addColorStop(0.35, "rgba(255,255,255,0.16)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+})();
 
 scene.add(new THREE.HemisphereLight(0xf3efe8, 0x15181c, 1.0));
 const key = new THREE.DirectionalLight(0xfff1e0, 2.2);
@@ -200,7 +207,7 @@ function drawHand(h3, dt) {
     h3.trailPts = [];
     return;
   }
-  const a = approach(dt, 0.045); // ~45 ms time constant: smooth, still responsive
+  const a = approach(dt, tracker.smoothTau); // adapts to the detection rate: continuous motion between results
   h3.pts.forEach((p, i) => p.lerp(h3.target[i], a));
   h3.color.lerp(h3.targetColor, approach(dt, 0.12));
   const k = screenW / 3.7;
@@ -354,11 +361,13 @@ function buildRing() {
     const lit = faceMesh(id, "#ece8e1", true);
     lit.position.z = 0.002;
     lit.material.opacity = 0;
-    tile.add(idle, lit);
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.2), new THREE.MeshBasicMaterial({ map: HALO, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    halo.position.z = -0.01;
+    tile.add(halo, idle, lit);
     const angle = (i / RING_IDS.length) * Math.PI * 2;
     tile.position.set(Math.sin(angle) * RADIUS, 0, Math.cos(angle) * RADIUS);
     tile.rotation.y = angle;
-    tile.userData = { id, angle, lit, active: false, color: "#ece8e1", lift: new Spring(0, { k: 150, zeta: 0.62 }) };
+    tile.userData = { id, angle, lit, halo, active: false, color: "#ece8e1", lift: new Spring(0, { k: 150, zeta: 0.62 }) };
     ring.add(tile);
     return tile;
   });
@@ -522,7 +531,7 @@ function fit() {
   const h = canvas.clientHeight;
   if (!w || !h) return;
   renderer.setSize(w, h, false);
-  composer.setSize(w, h);
+
   const free = freeArea();
   camera.setViewOffset(w, h, free.right / 2, -free.top / 2, w, h);
   const fw = w - free.right;
@@ -718,6 +727,11 @@ const camTarget = new THREE.Vector3();
 let latest = null;
 let lastFrame = performance.now();
 let running = false;
+let waitingFirst = null;
+// While the opaque start screen covers the stage there is nothing to see: skip rendering, and use the idle frames to
+// upload tile textures a few at a time so the reveal doesn't hitch on ~80 uploads in one frame.
+let stageVisible = false;
+const warmQueue = [];
 
 function animate() {
   requestAnimationFrame(animate);
@@ -727,6 +741,7 @@ function animate() {
   if (step) {
     const { state, landmarkMs, t } = step;
     latest = state;
+    if (waitingFirst) { $("cam-state").textContent = waitingFirst; $("cam-dot").className = "dot live"; waitingFirst = null; }
     const frameDt = t - lastFrame;
     lastFrame = t;
     hud.fps = hud.fps ? 0.9 * hud.fps + 0.1 * (1000 / Math.max(frameDt, 1)) : 1000 / Math.max(frameDt, 1);
@@ -772,6 +787,7 @@ function animate() {
     tile.scale.set(s, s, s);
     tile.position.y = lift * 0.2;
     tile.userData.lit.material.opacity = Math.max(0, Math.min(1, lift));
+    tile.userData.halo.material.opacity = Math.max(0, Math.min(1, lift)) * 0.55;
   }
 
   stepObject(dt);
@@ -789,7 +805,11 @@ function animate() {
   camera.position.lerp(camTarget, reducedMotion.matches ? 1 : approach(dt, 0.45));
   camera.lookAt(cameraBase.x * 0.85, SCREEN_Y - 0.35, 0);
   hands3d.forEach((h3) => drawHand(h3, dt));
-  composer.render();
+  if (!stageVisible) {
+    for (let i = 0; i < 3 && warmQueue.length; i++) renderer.initTexture(warmQueue.shift());
+    return;
+  }
+  renderer.render(scene, camera);
   updateTimecode(performance.now());
 }
 
@@ -820,7 +840,7 @@ loadPoses().then((poses) => {
   posesReady = true;
   renderTips(); // glyphs need the pose data
   setNow(null, "#ece8e1");
-  hero = new PoseHero($("hero"), poses, { name: $("hero-name"), hint: $("hero-hint"), root: $("hero-caption") });
+  hero = new PoseHero($("hero"), poses, { name: $("hero-name"), hint: $("hero-hint"), root: $("hero-caption") }, [document.querySelector("#start .start-copy"), $("hero-caption")]);
   hero.start();
   document.querySelectorAll(".controls .g").forEach((el) => {
     el.innerHTML = `<img src="${glyphURL(el.dataset.glyph, 24, "#d4d4d8")}" alt="" width="24" height="24">`;
@@ -830,6 +850,8 @@ loadPoses().then((poses) => {
 ready
   .then(([{ delegate }]) => {
     buildRing();
+    ring.traverse((o) => o.material?.map && warmQueue.push(o.material.map));
+    if (params.has("autostart")) stageVisible = true;
     canvas.classList.add("ready");
     btn.disabled = false;
     btnLabel.textContent = "Turn on camera";
@@ -854,7 +876,7 @@ ready
   });
 animate();
 
-async function begin(demo) {
+async function begin(demo = params.get("video") || undefined) {
   btn.disabled = demoBtn.disabled = true;
   btnLabel.textContent = demo ? "Loading clip" : "Waiting for camera";
   setBoot(demo ? "Starting the demo clip" : "Asking for camera permission", "busy");
@@ -868,12 +890,15 @@ async function begin(demo) {
     screenIn.set(1);
     running = true;
     liveSince = performance.now();
+    stageVisible = true;
+    renderer.compile(scene, camera);
     startEl.classList.add("leaving");
     viewport.classList.add("live");
     setTimeout(() => { startEl.hidden = true; hero?.stop(); }, 600);
-    $("cam-dot").className = "dot live";
     const isDemo = source === "demo video";
-    $("cam-state").textContent = isDemo ? "Demo" : "Live";
+    $("cam-state").textContent = "Starting tracking";
+    $("cam-dot").className = "dot busy";
+    waitingFirst = isDemo ? "Demo" : "Live";
     $("slate-res").textContent = `${video.videoWidth} × ${video.videoHeight}${isDemo ? " · demo clip" : ""}`;
     fit();
     $("inspector").focus({ preventScroll: true });

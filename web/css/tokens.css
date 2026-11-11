@@ -73,7 +73,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button, input, select { font: inherit; color: inherit; letter-spacing: inherit; }
-button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button, a, [role="tab"], [role="slider"], label, select { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+button { cursor: pointer; user-select: none; -webkit-user-select: none; }
 :focus-visible { outline: 2px solid rgba(127, 168, 255, 0.9); outline-offset: 2px; }
 ::selection { background: rgba(127, 168, 255, 0.35); }
 
@@ -92,7 +93,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   transition: background-color var(--fast) var(--ease-out), transform var(--fast) var(--ease-out), opacity var(--fast) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) { .btn:hover { background: var(--fill-strong); } }
-.btn:active { transform: scale(0.97); }
+.btn:active, .btn.air-press { transform: scale(0.96); transition-duration: 80ms; }
 .btn:disabled { opacity: 0.45; cursor: default; transform: none; }
 .btn.primary { background: var(--bone); color: #0b0b0d; font-weight: 600; }
 @media (hover: hover) and (pointer: fine) { .btn.primary:hover { background: #fff; } }
@@ -123,6 +124,8 @@ kbd {
 .segmented > a, .segmented > button { position: relative; z-index: 1; flex: 1; display: grid; place-items: center; height: 28px; padding: 0 var(--s4); border: 0; border-radius: var(--r-pill); background: none; color: var(--dim); text-decoration: none; font-size: var(--t-small); font-weight: 500; white-space: nowrap; transition: color var(--fast) var(--ease-out); }
 @media (hover: hover) and (pointer: fine) { .segmented > a:hover, .segmented > button:hover { color: var(--bone); } }
 .segmented > a[aria-current="page"], .segmented > [aria-selected="true"] { color: var(--bone); }
+.segmented > a:active, .segmented > button:active { transform: scale(0.97); }
+.segmented > a, .segmented > button { transition: color var(--fast) var(--ease-out), transform var(--fast) var(--ease-out); }
 .segmented > a[aria-current="page"] { background: rgba(255, 255, 255, 0.14); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
 .segmented .thumb { position: absolute; z-index: 0; top: 2px; left: 0; height: 28px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.14); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08); transition: transform var(--base) var(--ease-out), width var(--base) var(--ease-out); }
 

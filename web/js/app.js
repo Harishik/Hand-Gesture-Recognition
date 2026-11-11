@@ -32,7 +32,11 @@ const lab = new HandScene($("lab3d"));
 // Render the 3D lab only while it is on screen, so it doesn't compete with hand tracking for the GPU.
 let labVisible = false;
 new IntersectionObserver(([entry]) => (labVisible = entry.isIntersecting)).observe($("lab3d"));
-onFrame((dt) => labVisible && lab.render(dt));
+onFrame((dt) => {
+  if (!labVisible) return;
+  lab.tau = tracker.smoothTau;
+  lab.render(dt);
+});
 
 // ---------------------------------------------------------------- actions & the demo deck
 const ACTIONS = {
@@ -504,7 +508,7 @@ function drawOverlay(dt) {
   const { width: w, height: h } = els.overlay;
   ctx.clearRect(0, 0, w, h);
   if (!running) return;
-  const a = approach(dt, 0.045);
+  const a = approach(dt, tracker.smoothTau);
   const scale = w / 640;
   for (const [key, d] of drawn) {
     d.alpha += ((d.present ? 1 : 0) - d.alpha) * approach(dt, d.present ? 0.08 : 0.15);
@@ -778,7 +782,15 @@ function updateCursor(state) {
       const el = document.elementFromPoint(cur.x, cur.y);
       const drag = el?.closest("[data-pinch-drag]");
       if (drag) { dragTarget = drag; volume.classList.add("dragging"); }
-      else el?.closest("button, [data-action], select, label, a, [role=tab]")?.click();
+      else {
+        const target = el?.closest("button, [data-action], select, label, a, [role=tab]");
+        if (target) {
+          // Same press feedback a mouse click gets, so an air click feels like a click.
+          target.classList.add("air-press");
+          setTimeout(() => target.classList.remove("air-press"), 140);
+          target.click();
+        }
+      }
       logEvent({ id: "pinch" }, null);
       if (!els.coach.hidden) dismissCoach();
     }
@@ -788,7 +800,7 @@ function updateCursor(state) {
 }
 onFrame((dt) => {
   // The engine's One Euro filter removes jitter; this upsamples the 30 Hz stream to the display rate.
-  const a = approach(dt, 0.035);
+  const a = approach(dt, tracker.smoothTau * 0.8);
   cur.x += (cur.tx - cur.x) * a;
   cur.y += (cur.ty - cur.y) * a;
   els.cursor.classList.toggle("on", cur.on);
@@ -816,6 +828,7 @@ $("coach-ok").addEventListener("click", dismissCoach);
 
 // ---------------------------------------------------------------- main loop
 let running = false;
+let waitingFirst = null; // status label to show once the first tracking result arrives
 let lastFrameT = performance.now();
 
 onFrame((dt) => {
@@ -853,6 +866,7 @@ onFrame((dt) => {
     } catch (err) {
       console.error("3D lab update failed", err); // never let the 3D view stop recognition
     }
+    if (waitingFirst) { setCam(waitingFirst, "live"); waitingFirst = null; }
     trackOverlay(state);
     updatePanels(state, t);
     updateCursor(state);
@@ -905,7 +919,7 @@ ready
     showProblem({ title: "Couldn't load the recognition models", body: "Check your connection and reload. The models are fetched once, then cached by the browser." });
   });
 
-async function begin(demo) {
+async function begin(demo = params.get("video") || undefined) {
   if (running) return;
   els.startBtn.disabled = demoBtn.disabled = true;
   btnLabel.textContent = demo ? "Loading clip" : "Waiting for camera";
@@ -925,7 +939,8 @@ async function begin(demo) {
     els.stage.classList.add("live");
     running = true;
     const isDemo = source === "demo video";
-    setCam(isDemo ? "Demo" : "Live", "live");
+    setCam("Starting tracking", "busy");
+    waitingFirst = isDemo ? "Demo" : "Live";
     $("slate-res").textContent = `${vw} × ${vh}${isDemo ? " · demo clip" : ""}`;
     els.nowSub.textContent = "No hands in view";
   } catch (err) {
@@ -973,6 +988,6 @@ renderBindings();
 renderCustomList();
 els.nowIcon.innerHTML = icon("palm", 32, "rgba(161,161,166,0.3)");
 if (!els.start.hidden) {
-  hero = new PoseHero($("hero"), poses, { name: $("hero-name"), hint: $("hero-hint"), root: $("hero-caption") });
+  hero = new PoseHero($("hero"), poses, { name: $("hero-name"), hint: $("hero-hint"), root: $("hero-caption") }, [document.querySelector("#start .start-copy"), $("hero-caption")]);
   hero.start();
 }

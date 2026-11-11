@@ -165,7 +165,7 @@ export class HandScene {
   render(dt = 1 / 60) {
     const up = new THREE.Vector3(0, 1, 0);
     const dir = new THREE.Vector3();
-    const a = approach(dt, 0.045);
+    const a = approach(dt, this.tau ?? 0.045);
     for (const hand of this.hands) {
       if (!hand.group.visible) continue;
       hand.pts.forEach((p, i) => p.lerp(hand.target[i], a));
