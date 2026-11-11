@@ -2,75 +2,123 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Gesture Studio</title>
   <meta name="description" content="Real-time hand gesture recognition in the browser. 33 gestures, tracked in 3D, entirely on your device.">
+  <meta name="theme-color" content="#09090b">
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/studio3d.css">
 </head>
 <body>
+  <a class="skip" href="#inspector">Skip to recognition panel</a>
   <header class="bar">
     <a class="wordmark" href="./" aria-label="Gesture Studio home">
-      <img src="assets/mark.svg" alt="" width="28" height="28">
+      <img src="assets/mark.svg" alt="" width="24" height="24">
       <span>Gesture Studio</span>
     </a>
-    <div class="status" aria-live="polite">
-      <span class="dot" id="cam-dot"></span><span id="cam-state">Camera off</span>
-      <span class="sep"></span><span><span id="fps">0</span>&nbsp;fps</span>
-      <span class="sep lat"></span><span class="lat"><span id="latency">0</span>&nbsp;ms</span>
+    <nav class="segmented" aria-label="View">
+      <a href="./" aria-current="page">Studio</a>
+      <a href="classic.html">Classic</a>
+    </nav>
+    <div class="readouts" aria-label="Session status">
+      <span class="readout source"><span class="dot" id="cam-dot"></span><span id="cam-state">Standby</span></span>
+      <span class="readout"><b id="fps">–</b> fps</span>
+      <span class="readout lat"><b id="latency">–</b> ms</span>
+      <span class="readout dev" id="device" title="Where hand tracking runs">–</span>
     </div>
-    <a class="quiet" href="classic.html">Classic view</a>
+    <button class="btn ghost icon" id="help-btn" aria-label="Keyboard shortcuts" aria-haspopup="dialog"><kbd>?</kbd></button>
   </header>
 
-  <main class="studio">
-    <section class="viewport" id="viewport" aria-label="Live 3D view">
-      <canvas id="scene"></canvas>
-      <video id="video" playsinline muted hidden></video>
+  <main class="studio" id="viewport" aria-label="Live 3D view">
+    <canvas id="scene" aria-hidden="true"></canvas>
+    <video id="video" playsinline muted hidden></video>
 
-      <div class="start" id="start">
-        <img src="assets/mark.svg" alt="" width="64" height="64">
-        <h1>See your hands, live</h1>
-        <p>Gesture Studio tracks both hands in 3D and recognises 33 gestures as you make them. Video stays on this device.</p>
-        <button id="start-btn" disabled>Loading models</button>
-        <p class="hint" id="start-hint">Works best in Chrome or Edge with your hand about an arm's length from the camera.</p>
-      </div>
-    </section>
+    <div class="slate" aria-hidden="true">
+      <span>Camera <b id="slate-res">–</b></span>
+      <span><b id="timecode">00:00:00:00</b></span>
+    </div>
 
-    <aside class="panel" aria-label="Recognition">
-      <section class="now">
-        <canvas id="now-glyph" width="176" height="176" aria-hidden="true"></canvas>
-        <div>
-          <h2 id="now-name">No hand</h2>
-          <p id="now-detail">Raise a hand in front of the camera</p>
+    <div class="start" id="start">
+      <canvas id="hero" aria-hidden="true"></canvas>
+      <div class="start-copy">
+        <p class="eyebrow enter" style="--i:0"><span class="dot" id="boot-dot"></span><span id="boot-state">Loading models</span></p>
+        <h1 class="enter" style="--i:1">Your hands,<br><span>read live.</span></h1>
+        <p class="lede enter" style="--i:2">Both hands tracked in 3D. Thirty-three gestures recognised the moment you make them. Every frame stays on this device.</p>
+        <div class="actions enter" style="--i:3">
+          <button class="btn primary lg" id="start-btn" disabled><span class="spinner" aria-hidden="true"></span><span>Loading models</span></button>
+          <button class="btn lg" id="demo-btn">Watch the demo</button>
         </div>
-        <div class="meter" aria-hidden="true"><i id="now-meter"></i><b id="now-hold"></b></div>
-        <p class="conf"><span id="now-conf">0</span>% confidence</p>
-      </section>
-
-      <section>
-        <h3>Also likely</h3>
-        <ol class="alts" id="alts"></ol>
-      </section>
-
-      <section>
-        <h3>Recognised</h3>
-        <ol class="history" id="history"><li class="empty">Hold a gesture for half a second to log it.</li></ol>
-      </section>
-
-      <section class="try">
-        <h3>Things to try</h3>
-        <dl>
-          <dt>Fist, then move</dt><dd>Turns the object on the right</dd>
-          <dt>Two open hands</dt><dd>Move apart or together to resize it</dd>
-          <dt>Pinch</dt><dd>Changes its finish</dd>
-          <dt>Swipe sideways</dt><dd>Spins the gesture ring</dd>
+        <div class="problem" id="problem" role="alert" hidden><b id="problem-title"></b><p id="problem-body"></p></div>
+        <p class="hint enter" style="--i:4" id="start-hint">Works best in Chrome or Edge, an arm's length from the camera.</p>
+        <dl class="facts enter" style="--i:5">
+          <div><dt>33</dt><dd>gestures</dd></div>
+          <div><dt>98.8%</dt><dd>test accuracy</dd></div>
+          <div><dt>0 bytes</dt><dd>uploaded</dd></div>
         </dl>
+      </div>
+      <div class="pose-caption" id="hero-caption" aria-hidden="true">
+        <b id="hero-name">Palm</b>
+        <span id="hero-hint">Open hand, fingers spread</span>
+      </div>
+    </div>
+
+    <aside class="inspector glass" id="inspector" tabindex="-1" aria-label="Recognition">
+      <section class="now" id="now" aria-live="polite" aria-atomic="true">
+        <div class="now-top">
+          <canvas id="now-glyph" width="176" height="176" aria-hidden="true"></canvas>
+          <span class="chan" id="now-chan">No hand</span>
+        </div>
+        <h2 id="now-name">No hand</h2>
+        <p id="now-detail">Raise a hand in front of the camera</p>
+        <div class="meter" aria-hidden="true"><i id="conf-bar"></i><b id="hold-bar"></b></div>
+        <p class="conf"><span><b id="now-conf">0</b>% confidence</span><span id="hold-note">Hold to log</span></p>
+      </section>
+
+      <section>
+        <h3 class="heading">Also likely</h3>
+        <ol class="alts" id="alts"></ol>
+        <p class="empty-note" id="alts-note" hidden>No close alternatives. The model is sure.</p>
+        <div class="idle-tips" id="alts-idle">
+          <p>Waiting for a hand. Try one of these.</p>
+          <ul id="tips"></ul>
+        </div>
+      </section>
+
+      <section>
+        <h3 class="heading">Recognised <span class="aside" id="take-count"></span></h3>
+        <ol class="takes" id="history"></ol>
+        <p class="empty-note" id="history-empty">Hold any gesture still for half a second. It lands here with the time you made it.</p>
+      </section>
+
+      <section class="controls">
+        <h3 class="heading">Controls</h3>
+        <ul>
+          <li><span class="g" data-glyph="fist"></span><span><b>Fist, then move</b>Turns the object</span></li>
+          <li><span class="g" data-glyph="palm"></span><span><b>Two open hands</b>Spread apart to resize</span></li>
+          <li><span class="g" data-glyph="pinch"></span><span><b>Pinch</b>Changes the finish</span></li>
+          <li><span class="g" data-glyph="swipe_right"></span><span><b>Swipe sideways</b>Spins the gesture ring</span></li>
+        </ul>
+        <p class="kbd-hint"><kbd>←</kbd><kbd>→</kbd> spin · <kbd>F</kbd> finish · <kbd>?</kbd> all shortcuts</p>
       </section>
     </aside>
   </main>
+
+  <dialog class="sheet" id="help">
+    <header><h2>Keyboard shortcuts</h2><button class="btn ghost small" data-close>Done</button></header>
+    <dl>
+      <dt><kbd>Enter</kbd></dt><dd>Turn on the camera</dd>
+      <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Spin the gesture ring</dd>
+      <dt><kbd>F</kbd></dt><dd>Change the object's finish</dd>
+      <dt><kbd>R</kbd></dt><dd>Reset the object</dd>
+      <dt><kbd>C</kbd></dt><dd>Open Classic</dd>
+      <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+    </dl>
+  </dialog>
+  <div class="notices" id="notices" aria-live="polite"></div>
 
   <script type="importmap">
     {

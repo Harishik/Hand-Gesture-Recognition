@@ -2,6 +2,7 @@
 // with gestures: grab (fist) and move to rotate, two open hands apart / together to scale, pinch to change material.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { approach, reducedMotion } from "./motion.js";
 
 const CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -53,7 +54,12 @@ export class HandScene {
     this.object.position.set(0.16, 0, 0);
     this.scene.add(this.object);
     this.targetScale = 1;
-    this.spin = new THREE.Vector2(0.004, 0.006);
+    // Tracker frames set targets; render(dt) eases towards them every display frame.
+    this.spin = new THREE.Vector2(0.24, 0.36); // rad/s
+    this.spinGain = 1;
+    this.spinTarget = 1;
+    this.rotTarget = new THREE.Euler();
+    this.matTarget = { color: new THREE.Color(MATERIALS[0].color), metalness: MATERIALS[0].metalness, roughness: MATERIALS[0].roughness };
 
     // Two hand skeletons: 21 joint spheres + 21 bone cylinders each.
     this.hands = [0, 1].map(() => this.makeHand());
@@ -83,7 +89,7 @@ export class HandScene {
     });
     group.visible = false;
     this.scene.add(group);
-    return { group, joints, bones };
+    return { group, joints, bones, target: Array.from({ length: 21 }, () => new THREE.Vector3()), pts: Array.from({ length: 21 }, () => new THREE.Vector3()), fresh: true };
   }
 
   resize() {
@@ -104,41 +110,38 @@ export class HandScene {
    * coordinates in [0, 1]. labels: per hand, recognised gesture id. mirror: whether the 2D view is mirrored.
    */
   update(world, screen, labels, events, mirror) {
-    const up = new THREE.Vector3(0, 1, 0);
     this.hands.forEach((hand, h) => {
       const pts = world[h];
-      hand.group.visible = Boolean(pts);
-      if (!pts) return;
+      if (!pts) {
+        hand.group.visible = false;
+        hand.fresh = true;
+        return;
+      }
+      hand.group.visible = true;
       // Place each hand where it is on screen, so two hands appear side by side.
       const ox = (screen[h][0][0] - 0.5) * 0.5;
       const oy = -(screen[h][0][1] - 0.5) * 0.35;
       const k = 1.8; // enlarge the real-size hand (~18 cm) for the scene
-      const v = pts.map(([x, y, z]) => new THREE.Vector3((mirror ? -x : x) * k + ox, -y * k + oy, -z * k));
-      v.forEach((p, i) => hand.joints[i].position.copy(p));
-      CONNECTIONS.forEach(([a, b], i) => {
-        const bone = hand.bones[i];
-        const dir = new THREE.Vector3().subVectors(v[b], v[a]);
-        bone.position.copy(v[a]).addScaledVector(dir, 0.5);
-        bone.scale.set(1, dir.length(), 1);
-        bone.quaternion.setFromUnitVectors(up, dir.normalize());
-      });
+      pts.forEach(([x, y, z], i) => hand.target[i].set((mirror ? -x : x) * k + ox, -y * k + oy, -z * k));
+      if (hand.fresh) hand.pts.forEach((p, i) => p.copy(hand.target[i]));
+      hand.fresh = false;
     });
 
-    // Grab with a fist: the object rotates with the hand's movement on screen.
+    // Grab with a fist: the object turns with the hand's movement on screen.
     const grabbing = labels.findIndex((l) => GRAB.has(l));
     if (grabbing >= 0) {
       const p = screen[grabbing][9];
       if (this.grab) {
-        this.object.rotation.y += (p[0] - this.grab[0]) * 7;
-        this.object.rotation.x += (p[1] - this.grab[1]) * 7;
-        this.spin.set(0, 0);
+        this.rotTarget.y += (p[0] - this.grab[0]) * 7;
+        this.rotTarget.x += (p[1] - this.grab[1]) * 7;
       }
       this.grab = [p[0], p[1]];
-      this.object.material.emissive?.setHex(0x0b3b52);
+      this.spinTarget = 0;
+      this.object.material.emissive?.setHex(0x1a1408);
     } else {
       this.grab = null;
+      this.spinTarget = 1;
       this.object.material.emissive?.setHex(0x000000);
-      this.spin.set(0.004, 0.006);
     }
 
     // Two open hands: the change in distance between them scales the object.
@@ -153,17 +156,41 @@ export class HandScene {
     if (events.some((e) => e.type === "pinch_start")) {
       this.materialIndex = (this.materialIndex + 1) % MATERIALS.length;
       const { color, metalness, roughness } = MATERIALS[this.materialIndex];
-      this.object.material.color.setHex(color);
-      this.object.material.metalness = metalness;
-      this.object.material.roughness = roughness;
+      this.matTarget.color.setHex(color);
+      this.matTarget.metalness = metalness;
+      this.matTarget.roughness = roughness;
     }
   }
 
-  render() {
-    this.object.rotation.x += this.spin.x;
-    this.object.rotation.y += this.spin.y;
-    const s = this.object.scale.x + (this.targetScale - this.object.scale.x) * 0.15;
+  render(dt = 1 / 60) {
+    const up = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3();
+    const a = approach(dt, 0.045);
+    for (const hand of this.hands) {
+      if (!hand.group.visible) continue;
+      hand.pts.forEach((p, i) => p.lerp(hand.target[i], a));
+      hand.pts.forEach((p, i) => hand.joints[i].position.copy(p));
+      CONNECTIONS.forEach(([i, j], n) => {
+        const bone = hand.bones[n];
+        dir.subVectors(hand.pts[j], hand.pts[i]);
+        bone.position.copy(hand.pts[i]).addScaledVector(dir, 0.5);
+        bone.scale.set(1, dir.length(), 1);
+        bone.quaternion.setFromUnitVectors(up, dir.normalize());
+      });
+    }
+    this.spinGain += (this.spinTarget - this.spinGain) * approach(dt, 0.35);
+    const spin = reducedMotion.matches ? 0 : this.spinGain;
+    this.rotTarget.x += this.spin.x * spin * dt;
+    this.rotTarget.y += this.spin.y * spin * dt;
+    const r = approach(dt, 0.07);
+    this.object.rotation.x += (this.rotTarget.x - this.object.rotation.x) * r;
+    this.object.rotation.y += (this.rotTarget.y - this.object.rotation.y) * r;
+    const s = this.object.scale.x + (this.targetScale - this.object.scale.x) * approach(dt, 0.1);
     this.object.scale.setScalar(s);
+    const m = approach(dt, 0.18);
+    this.object.material.color.lerp(this.matTarget.color, m);
+    this.object.material.metalness += (this.matTarget.metalness - this.object.material.metalness) * m;
+    this.object.material.roughness += (this.matTarget.roughness - this.object.material.roughness) * m;
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }

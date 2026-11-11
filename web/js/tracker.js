@@ -39,13 +39,16 @@ export class HandTracker {
     return { hand, pair, delegate: this.delegate };
   }
 
-  /** Starts the webcam, or a looping video file when `?video=<url>` is in the page URL (for demos and tests). */
-  async start() {
-    const demo = new URLSearchParams(location.search).get("video");
+  /**
+   * Starts the webcam, or a looping video file: `demo` if given, else `?video=<url>` in the page URL (demos, tests).
+   */
+  async start(demo = new URLSearchParams(location.search).get("video")) {
     if (demo) {
+      this.video.srcObject = null;
       this.video.src = demo;
       this.video.loop = true;
     } else {
+      if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("No camera API"), { name: "InsecureContextError" });
       this.video.srcObject = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
         audio: false,
@@ -57,6 +60,11 @@ export class HandTracker {
     if (this.video.readyState < 2) await new Promise((r) => this.video.addEventListener("loadeddata", r, { once: true }));
     this.source = demo ? "demo video" : `${this.video.videoWidth}×${this.video.videoHeight}`;
     return this.source;
+  }
+
+  /** Stops the camera stream, if one is running. */
+  stop() {
+    this.video.srcObject?.getTracks?.().forEach((t) => t.stop());
   }
 
   get aspect() {
@@ -83,5 +91,27 @@ export class HandTracker {
       h.world = hands[i].world;
     });
     return { state, landmarkMs, t: t0 };
+  }
+}
+
+/** Plain-language explanation of a getUserMedia failure: { title, body, retry } for the onboarding screen. */
+export function describeCameraError(err) {
+  switch (err?.name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return {
+        title: "Camera access is blocked",
+        body: "Click the camera icon in the address bar, choose Allow, then try again. Or play the demo clip to see it working.",
+      };
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return { title: "No camera found", body: "Plug in a webcam and try again, or play the demo clip instead." };
+    case "NotReadableError":
+    case "AbortError":
+      return { title: "The camera is busy", body: "Another app or tab is using it. Close that, then try again." };
+    case "InsecureContextError":
+      return { title: "This page can't reach a camera", body: "Open it over https or from localhost. The demo clip still works." };
+    default:
+      return { title: "The camera didn't start", body: `${err?.message || "Unknown error"}. Try again, or play the demo clip.` };
   }
 }
