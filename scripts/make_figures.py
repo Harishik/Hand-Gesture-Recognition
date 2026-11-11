@@ -22,12 +22,22 @@ ROOT = Path(__file__).resolve().parents[1]
 FIG = ROOT / "docs" / "figures"
 BG, FG, MUTED, ACCENT, ACCENT2 = "#0d1117", "#e6edf3", "#8b949e", "#58e6c1", "#ff7a59"
 
-plt.rcParams.update({
-    "figure.facecolor": BG, "axes.facecolor": BG, "savefig.facecolor": BG,
-    "text.color": FG, "axes.labelcolor": FG, "xtick.color": MUTED, "ytick.color": MUTED,
-    "axes.edgecolor": "#30363d", "font.family": "DejaVu Sans", "font.size": 10,
-    "axes.spines.top": False, "axes.spines.right": False,
-})
+plt.rcParams.update(
+    {
+        "figure.facecolor": BG,
+        "axes.facecolor": BG,
+        "savefig.facecolor": BG,
+        "text.color": FG,
+        "axes.labelcolor": FG,
+        "xtick.color": MUTED,
+        "ytick.color": MUTED,
+        "axes.edgecolor": "#30363d",
+        "font.family": "DejaVu Sans",
+        "font.size": 10,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+    }
+)
 
 
 def demo_gif(src=ROOT / "web" / "test-media" / "demo.webm", out=FIG / "demo.gif", width=480, step=2):
@@ -89,7 +99,7 @@ def results():
     pc = core["per_class"]
     items = sorted(((k, v["f1"]) for k, v in pc.items() if isinstance(v, dict) and "f1" in v), key=lambda t: t[1])
     fig, ax = plt.subplots(figsize=(9, 6))
-    names, f1 = zip(*items)
+    names, f1 = zip(*items, strict=True)
     ax.barh(names, f1, color=[ACCENT2 if v < 0.97 else ACCENT for v in f1])
     ax.set_xlim(min(f1) - 0.02, 1.0)
     ax.tick_params(axis="y", labelsize=8)
@@ -101,8 +111,12 @@ def results():
     # Headline metrics + fairness slices
     sl = m["hagrid_test_core_slices"]
     fig, axes = plt.subplots(1, 2, figsize=(11, 3.8), gridspec_kw={"width_ratios": [1, 1.4]})
-    head = {"Accuracy": core["accuracy"], "Macro F1": core["macro_f1"],
-            "Open-set acc": m["hagrid_test_open_set"]["accuracy"], "1 − ECE": 1 - core["ece"]}
+    head = {
+        "Accuracy": core["accuracy"],
+        "Macro F1": core["macro_f1"],
+        "Open-set acc": m["hagrid_test_open_set"]["accuracy"],
+        "1 − ECE": 1 - core["ece"],
+    }
     axes[0].bar(head.keys(), head.values(), color=ACCENT)
     for i, v in enumerate(head.values()):
         axes[0].text(i, v + 0.002, f"{v:.1%}", ha="center", fontsize=9)

@@ -4,16 +4,42 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  python:
+    name: Python · lint, format, tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
       - run: pip install -e ".[legacy,dev]"
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: pytest -q
+      - name: Lint
+        run: ruff check .
+      - name: Format
+        run: ruff format --check .
+      - name: Tests
+        run: pytest -q
+
+  web:
+    name: Web app · parity and syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript features and MLP match the Python reference
+        run: node web/tests/parity.mjs
+      - name: Every browser module parses
+        run: |
+          for f in web/js/*.js; do
+            if [ "$(basename "$f")" = "landmark-worker.js" ]; then node --check "$f"; else node --input-type=module --check < "$f"; fi || { echo "::error file=$f::syntax error"; exit 1; }
+          done
+          echo "checked $(ls web/js/*.js | wc -l) modules"

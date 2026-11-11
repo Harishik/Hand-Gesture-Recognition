@@ -1,6 +1,6 @@
 """Download HANDS (Nuzzi et al. 2021, CC BY 4.0) RGB archives and annotations, one subject at a time.
 
-    python scripts/download_hands.py 2 3      # Subject2.zip/.txt, Subject3.zip/.txt into data/raw/hands
+python scripts/download_hands.py 2 3      # Subject2.zip/.txt, Subject3.zip/.txt into data/raw/hands
 """
 
 import json
