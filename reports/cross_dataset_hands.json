@@ -1,0 +1,265 @@
+{
+ "one_hand": {
+  "n": 3504,
+  "landmarker_detection_rate": 0.7953767123287672,
+  "accuracy_given_detection": 0.8636526731252242,
+  "end_to_end_accuracy": 0.6869292237442922,
+  "rejected_as_no_gesture": 0.00968783638320775,
+  "precision_of_named_predictions": 0.8721014492753624,
+  "per_gesture_accuracy": {
+   "Five": 0.9776,
+   "Four": 0.9384,
+   "One": 0.8595,
+   "Punch": 0.9887,
+   "Span": 0.3763,
+   "Three": 0.9835,
+   "Two": 0.8872
+  },
+  "per_gesture_top_predictions": {
+   "Five": [
+    [
+     "palm",
+     436
+    ],
+    [
+     "stop",
+     4
+    ],
+    [
+     "stop_inverted",
+     3
+    ]
+   ],
+   "Four": [
+    [
+     "four",
+     396
+    ],
+    [
+     "no_gesture",
+     10
+    ],
+    [
+     "palm",
+     6
+    ]
+   ],
+   "One": [
+    [
+     "one",
+     312
+    ],
+    [
+     "fist",
+     31
+    ],
+    [
+     "little_finger",
+     7
+    ]
+   ],
+   "Punch": [
+    [
+     "fist",
+     349
+    ],
+    [
+     "no_gesture",
+     2
+    ],
+    [
+     "one",
+     1
+    ]
+   ],
+   "Span": [
+    [
+     "call",
+     143
+    ],
+    [
+     "little_finger",
+     113
+    ],
+    [
+     "rock",
+     96
+    ]
+   ],
+   "Three": [
+    [
+     "three2",
+     417
+    ],
+    [
+     "thumb_index",
+     4
+    ],
+    [
+     "mute",
+     1
+    ]
+   ],
+   "Two": [
+    [
+     "peace",
+     354
+    ],
+    [
+     "one",
+     26
+    ],
+    [
+     "two_up",
+     10
+    ]
+   ]
+  }
+ },
+ "one_hand_without_equivalent": {
+  "Eight": [
+   [
+    "three3",
+    295
+   ],
+   [
+    "rock",
+    36
+   ],
+   [
+    "peace",
+    14
+   ]
+  ],
+  "Horiz": [
+   [
+    "no_gesture",
+    559
+   ],
+   [
+    "three_gun",
+    247
+   ],
+   [
+    "call",
+    17
+   ]
+  ],
+  "Nine": [
+   [
+    "ok",
+    336
+   ],
+   [
+    "three",
+    29
+   ],
+   [
+    "no_gesture",
+    21
+   ]
+  ],
+  "Seven": [
+   [
+    "three3",
+    355
+   ],
+   [
+    "three",
+    16
+   ],
+   [
+    "rock",
+    11
+   ]
+  ],
+  "Six": [
+   [
+    "three",
+    361
+   ],
+   [
+    "ok",
+    15
+   ],
+   [
+    "peace",
+    8
+   ]
+  ]
+ },
+ "two_hand": {
+  "n": 498,
+  "landmarker_detection_rate": 0.25301204819277107,
+  "accuracy_given_detection": 0.9841269841269841,
+  "end_to_end_accuracy": 0.24899598393574296,
+  "rejected_as_no_gesture": 0.0,
+  "precision_of_named_predictions": 0.9841269841269841,
+  "per_gesture_accuracy": {
+   "TimeOut": 1.0,
+   "XSign": 0.9661
+  },
+  "per_gesture_top_predictions": {
+   "TimeOut": [
+    [
+     "timeout",
+     67
+    ]
+   ],
+   "XSign": [
+    [
+     "xsign",
+     57
+    ],
+    [
+     "holy",
+     2
+    ]
+   ]
+  }
+ },
+ "two_hand_without_equivalent": {
+  "Collab": [
+   [
+    "hand_heart2",
+    57
+   ],
+   [
+    "take_picture",
+    2
+   ]
+  ]
+ },
+ "per_subject_one_hand": {
+  "1": {
+   "n": 700,
+   "landmarker_detection_rate": 0.9,
+   "accuracy_given_detection": 0.8095238095238095,
+   "end_to_end_accuracy": 0.7285714285714285
+  },
+  "2": {
+   "n": 704,
+   "landmarker_detection_rate": 0.7855113636363636,
+   "accuracy_given_detection": 0.9222423146473779,
+   "end_to_end_accuracy": 0.7244318181818182
+  },
+  "3": {
+   "n": 700,
+   "landmarker_detection_rate": 0.32,
+   "accuracy_given_detection": 0.9508928571428571,
+   "end_to_end_accuracy": 0.30428571428571427
+  },
+  "4": {
+   "n": 700,
+   "landmarker_detection_rate": 0.9814285714285714,
+   "accuracy_given_detection": 0.8296943231441049,
+   "end_to_end_accuracy": 0.8142857142857143
+  },
+  "5": {
+   "n": 700,
+   "landmarker_detection_rate": 0.99,
+   "accuracy_given_detection": 0.8715728715728716,
+   "end_to_end_accuracy": 0.8628571428571429
+  }
+ }
+}

@@ -13,7 +13,7 @@
   - The one-hand model reaches 98.8% accuracy and 98.9% macro precision over 26 gestures + rejection on 153,755 test hands from unseen subjects.
   - The pair model reaches 99.3% accuracy and 98.0% macro precision on 7 two-handed gestures.
 - **Open-set result:** the choice of negatives dominates real-world precision. Training rejection only on HaGRID's `no_gesture` class gives 32.4% gesture precision when other hand shapes appear, against 94.2% with all other gestures as negatives, with no loss on the closed-set test.
-- **Cross-dataset transfer:** on the independent HANDS dataset (Kinect v2, 5 subjects), 81.0% of detected hands are classified correctly (72.9% end to end, 700 samples), with near-perfect transfer on open palm and fist.
+- **Cross-dataset transfer:** on the independent HANDS dataset (Kinect v2, 5 subjects), 86.4% of detected hands are classified correctly across all five subjects (3,504 samples; 68.7% end to end), and two-hand gestures reach 98.4% when both hands are detected.
 - **Deployment:** the system runs in a web browser at about 25–30 FPS, with a JavaScript inference path verified against PyTorch to 2×10⁻⁶ in probability.
 
 ## 1. Introduction
@@ -28,7 +28,7 @@
 1. **Dataset audit:** a subject leak in the official split, an undocumented aspect-ratio mixture (measured by image-header probing), and the semantics of "inverted" classes, each with a fix.
 2. **Open-set rejection:** evidence that negative-class design, not model capacity, determines precision under open-set conditions, by a factor of three.
 3. **Models:** a complete 33-gesture model pair (one-hand MLP plus two-hand pair MLP) with calibrated confidence and per-demographic results.
-4. **Cross-dataset evaluation** on an independent dataset (HANDS, Kinect v2): 81.0% accuracy on detected hands without any fine-tuning.
+4. **Cross-dataset evaluation** on an independent dataset (HANDS, Kinect v2, 5 subjects): 86.4% accuracy on detected hands without any fine-tuning.
 5. **Reproducible deployment:** an open-source, on-device browser implementation with verified Python/JavaScript parity.
 
 ## 2. Related work
@@ -133,7 +133,7 @@ The features are invariant to hand order.
 | n | 70,282 | 57,592 | 111,955 | 6,197 | 5,415 | 2,476 |
 | Recall | 98.90 | 98.81 | 98.97 | 98.11 | 98.95 | 98.59 |
 
-**5.4 Cross-dataset transfer (HANDS [6]).** Both models were applied unchanged to HANDS Subject 1 (every third frame; 700 one-hand and 100 two-hand annotated samples). MediaPipe detected 90% of annotated single hands; of those, 81.0% were classified correctly (72.9% end to end; precision of named predictions 82.3%; 1.6% rejected as no gesture). Transfer is near-perfect for Five→palm (99.0%) and Punch→fist (98.7%) and strong for Three (93.9%) and Four (92.9%), but weaker for Two→peace (75.3%), One (68.3%) and Span→call (30.5%), whose HANDS executions sit between HaGRID classes. For two-hand gestures the bottleneck is detection, not classification: both hands were found in only 6% of frames, all of which were classified correctly. Remaining subjects (2–5) are left to future work owing to storage limits.
+**5.4 Cross-dataset transfer (HANDS [6]).** Both models were applied unchanged to all five HANDS subjects (every third frame; 3,504 one-hand and 498 two-hand annotated samples). MediaPipe detected 79.5% of annotated single hands; of those, 86.4% were classified correctly (68.7% end to end; precision of named predictions 87.2%; 1.0% rejected as no gesture). Per gesture, given detection: Punch→fist 98.9%, Three 98.4%, Five→palm 97.8%, Four 93.8%, Two→peace 88.7%, One 86.0%, Span→call 37.6% (confused with *little_finger* and *rock*, i.e. a definition mismatch). Accuracy given detection is stable across subjects (81.0–95.1%), whereas detection is not (32.0% for Subject 3 versus 78.6–99.0% for the others). For two-hand gestures both hands were found in 25.3% of frames, of which 98.4% were classified correctly (TimeOut 100%, XSign 96.6%); HANDS' Collab has no equivalent and is mostly mapped to *hand_heart2*. Transfer is therefore limited by the landmark detector and by gesture definitions, not by the classifier.
 - **Protocol:** the models are trained on HaGRIDv2 only. HANDS frames are processed with the same MediaPipe landmarker, and labels are mapped to HaGRID classes where the gestures coincide.
 - **What we report:** accuracy and macro precision on the mapped classes, rejection behaviour on HANDS gestures without a HaGRID equivalent, and the two-hand model on `XSign` and `TimeOut`.
 
@@ -152,7 +152,7 @@ The features are invariant to hand order.
 
 ## 7. Conclusion
 
-A 67-feature landmark MLP trained on subject-disjoint HaGRIDv2 reaches 98.8% accuracy on unseen people, stays within one point across demographic slices, runs in about 1 ms, and transfers to an independent Kinect dataset at 81% on detected hands. The cross-dataset gaps point to gesture-definition mismatch and two-hand detection as the main open problems, not classifier capacity.
+A 67-feature landmark MLP trained on subject-disjoint HaGRIDv2 reaches 98.8% accuracy on unseen people, stays within one point across demographic slices, runs in about 1 ms, and transfers to an independent Kinect dataset at 86.4% on detected hands (98.4% for two-hand gestures). The cross-dataset gaps point to gesture-definition mismatch and two-hand detection as the main open problems, not classifier capacity.
 
 ## References
 

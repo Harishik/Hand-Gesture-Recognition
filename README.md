@@ -11,7 +11,7 @@
 ![MediaPipe](https://img.shields.io/badge/MediaPipe-HandLandmarker-0097A7?logo=google&logoColor=white)
 ![Three.js](https://img.shields.io/badge/Three.js-3D%20UI-000000?logo=threedotjs&logoColor=white)
 ![Accuracy](https://img.shields.io/badge/HaGRIDv2%20test-98.8%25-58e6c1)
-![Cross--dataset](https://img.shields.io/badge/HANDS%20(unseen%20dataset)-81%25%20when%20detected-7aa2ff)
+![Cross--dataset](https://img.shields.io/badge/HANDS%20(unseen%20dataset)-86.4%25%20when%20detected-7aa2ff)
 ![CI](https://github.com/Harishik/Hand-Gesture-Recognition/actions/workflows/ci.yml/badge.svg)
 
 <img src="docs/figures/demo.gif" width="420" alt="Live recognition: hand skeleton with predicted gesture label"/>
@@ -94,20 +94,25 @@ All test numbers are on **HaGRIDv2 test subjects never seen in training**, with 
 
 ### Cross-dataset test: a dataset the model has never seen
 
-To check that the model isn't just learning HaGRID, it was run unchanged on [HANDS](https://data.mendeley.com/datasets/ndrczc35bt) (Nuzzi et al. 2021, CC BY 4.0): a different lab, a Kinect v2 camera, different people. Subject 1, every 3rd frame (`scripts/eval_hands.py`, [report](reports/cross_dataset_hands_subject1.json)):
+To check that the model isn't just learning HaGRID, both models were run **unchanged** on [HANDS](https://data.mendeley.com/datasets/ndrczc35bt) (Nuzzi et al. 2021, CC BY 4.0): a different lab, a Kinect v2 camera, five different people. All 5 subjects, every 3rd frame, 3,504 one-hand and 498 two-hand samples (`scripts/download_hands.py`, `scripts/eval_hands.py`, `scripts/summarise_hands.py`, [report](reports/cross_dataset_hands.json)).
 
-| HANDS gesture → ours | Accuracy |
-|---|---|
-| Five → palm | 99.0% |
-| Punch → fist | 98.7% |
-| Three → three | 93.9% |
-| Four → four | 92.9% |
-| Two → peace | 75.3% |
-| One → one | 68.3% |
-| Span → call | 30.5% |
-| **All 700 one-hand samples** | **81.0%** when a hand is detected (90% detected) · **72.9%** end to end |
+<p align="center"><img src="docs/figures/cross_dataset.png" width="80%" alt="Per-gesture accuracy on HANDS"/></p>
 
-The weak classes are the honest finding: HANDS' "Span" and "One" are performed with poses that sit between HaGRID classes, and MediaPipe finds both hands in only 6% of HANDS' two-hand frames (when it does, both two-hand gestures are 100% correct). Full analysis in [the paper draft](docs/paper/draft.md).
+| | One-hand (3,504) | Two-hand (498) |
+|---|---|---|
+| Hand(s) found by MediaPipe | 79.5% | 25.3% |
+| **Correct, when found** | **86.4%** | **98.4%** |
+| Correct end to end | 68.7% | 24.9% |
+| Precision of named predictions | 87.2% | 98.4% |
+
+| Subject | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| Hand found | 90.0% | 78.6% | **32.0%** | 98.1% | 99.0% |
+| Correct when found | 81.0% | 92.2% | 95.1% | 83.0% | 87.2% |
+
+**What this shows.** The classifier transfers well: palm, fist and three are 98–99%, four 94%, peace 89%, one 86%. The two real weaknesses are elsewhere:
+- **Gesture definitions differ.** HANDS' "Span" (38%) is performed between our *call*, *pinky* and *rock* poses.
+- **Detection, not classification, limits the end-to-end number.** MediaPipe misses most hands for Subject 3 and both hands in most two-hand frames. When it finds them, two-hand gestures are 98.4% correct.
 
 The method, ablations and caveats are in [docs/MODEL.md](docs/MODEL.md). Key findings:
 - **Open-set training matters:** training without "other gesture" negatives drops live precision to 32%.
@@ -145,7 +150,7 @@ The models are trained in PyTorch, then exported with BatchNorm folded into the 
 | Limitation | Evidence | Next step |
 |---|---|---|
 | Gesture definitions differ between datasets | HANDS "Span" (call) and "One" transfer poorly although the hand is found | Few-shot personalisation in the model's embedding ("Teach"), already in the classic UI; report its gain |
-| Two-hand detection, not classification, is the bottleneck | Both hands found in few HANDS frames; those found are classified correctly | Lower detection thresholds for pairs, or a whole-body/hand detector such as WiLoR |
+| Detection, not classification, is the bottleneck | MediaPipe finds 25% of HANDS two-hand frames (98.4% correct when found) and 32% of Subject 3's hands | Lower detection thresholds for pairs, or a whole-body/hand detector such as WiLoR |
 | Static gestures only | Only swipes are dynamic | Temporal model (GRU/TCN) over landmark sequences |
 | Small personal test set | 33 own photos: 75.8% strict / 87.9% lenient for the 33-gesture model (93.9% for the 6-gesture model) | Record a larger, consented multi-person set with `scripts/record_clips.py` |
 | Demographic slices are approximate | Gender and race come from HaGRID's automatic face-model annotations | Treat the fairness numbers as a sanity check, not an audit |
